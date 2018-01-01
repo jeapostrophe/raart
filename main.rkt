@@ -1,43 +1,37 @@
 #lang racket/base
 (require racket/match
+         racket/list
          racket/contract/base
          (for-syntax racket/base
                      syntax/parse)
          (prefix-in A: ansi))
 
-(define (A:style-text-color* c)
-  (if (eq? c 'default)
-    A:style-default-text-color
-    (A:style-text-color (hash-ref symbol->color c))))
-(define (A:style-background-color* c)
-  (if (eq? c 'default)
-    A:style-default-background-color
-    (A:style-background-color (hash-ref symbol->color c))))
-
 (define current-style (make-parameter 'normal))
-(define current-fg (make-parameter 'default))
-(define current-bg (make-parameter 'default))
-(define (set-drawing-parameters!)
-  (display
-   (A:select-graphic-rendition
-    (hash-ref symbol->style (current-style))
-    (A:style-text-color* (current-fg))
-    (A:style-background-color* (current-bg)))))
-
 (define symbol->style
   `#hasheq([normal . ,A:style-normal]
            [bold . ,A:style-bold]
            [inverse . ,A:style-inverse]
            [underline . ,A:style-underline]))
+(define current-fg (make-parameter 'default))
+(define current-bg (make-parameter 'default))
 (define symbol->color
-  `#hasheq([black . ,A:color-black]
-           [red . ,A:color-red]
-           [green . ,A:color-green]
-           [yellow . ,A:color-yellow]
-           [blue . ,A:color-blue]
-           [magenta . ,A:color-magenta]
-           [cyan . ,A:color-cyan]
-           [white . ,A:color-white]))
+  `#hasheq(
+           [black   .  0] [red       .  1] [green   .  2] [yellow   . 3]
+           [blue    .  4] [magenta   .  5] [cyan    .  6] [white    . 7]
+           [brblack .  8] [brred     .  9] [brgreen . 10] [bryellow . 11]
+           [brblue  . 12] [brmagenta . 13] [brcyan  . 14] [brwhite  . 15]))
+(define (select-text-color* c)
+  (if (eq? c 'default)
+    (A:select-graphic-rendition A:style-default-text-color)
+    (A:select-xterm-256-text-color (hash-ref symbol->color c))))
+(define (select-background-color* c)
+  (if (eq? c 'default)
+    (A:select-graphic-rendition A:style-default-background-color)
+    (A:select-xterm-256-background-color (hash-ref symbol->color c))))
+(define (set-drawing-parameters!)
+  (display (A:select-graphic-rendition (hash-ref symbol->style (current-style))))
+  (display (select-text-color* (current-fg)))
+  (display (select-background-color* (current-bg))))
 
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
@@ -53,9 +47,9 @@
 
 (define-syntax (with-maybe-parameterize stx)
   (syntax-parse stx
-    [(_ () e) #'e]
-    [(_ ([p:id v:id] . m) e)
-     #'(let ([t (λ () (with-maybe-parameterize m e))])
+    [(_ () . body) #'(let () . body)]
+    [(_ ([p:id v:id] . m) . body)
+     #'(let ([t (λ () (with-maybe-parameterize m . body))])
          (if v (parameterize ([p v]) (t)) (t)))]))
 
 (define (style s r) (with-drawing  s #f #f r))
@@ -67,36 +61,25 @@
               (with-maybe-parameterize ([current-style s]
                                         [current-fg f]
                                         [current-bg b])
-                (begin
-                  (set-drawing-parameters!)
-                  (! r c)))
+                (set-drawing-parameters!)
+                (! r c))
               (set-drawing-parameters!))))
 
 (define (blank [w 0] [h 1])
   (rart w h void))
 
+;; XXX What if ch is a newline?
 (define (char ch)
+  (when (char-iso-control? ch)
+    (error 'char "Illegal character: ~v" ch))
   (rart 1 1 (λ (r c) (display (A:goto r c)) (display ch))))
 
-;; XXX What if s contains a newline?
 (define (text s)
-  (rart (string-length s) 1
-        (λ (r c)
-          (display (A:goto r c))
-          (display s))))
-
+  (happend* (map char (string->list s))))
 (define (hline w)
-  (rart w 1
-        (λ (r c)
-          (display (A:goto r c))
-          (for ([i (in-range w)])
-            (display #\─)))))
+  (happend* (make-list w (char #\─))))
 (define (vline h)
-  (rart 1 h
-        (λ (r c)
-          (for ([i (in-range h)])
-            (display (A:goto (+ r i) c))
-            (display #\│)))))
+  (vappend* (make-list h (char #\│))))
 
 (define (vappend1 y x)
   (match-define (rart xw xh x!) x)
@@ -109,6 +92,7 @@
           (y! (+ r xh) c))))
 (define (vappend r1 . rs)
   (foldl vappend1 r1 rs))
+(define (vappend* rs) (apply vappend rs))
 
 (define (happend1 y x)
   (match-define (rart xw xh x!) x)
@@ -121,6 +105,7 @@
           (y! r (+ c xw)))))
 (define (happend r1 . rs)
   (foldl happend1 r1 rs))
+(define (happend* rs) (apply happend rs))
 
 (define (place-at back dr dc front)
   (match-define (rart bw bh b!) back)
@@ -131,8 +116,13 @@
         (λ (r c)
           (b! r c)
           (f! (+ r dr) (+ c dc)))))
+(define-syntax (place-at* stx)
+  (syntax-parse stx
+    [(_ b:expr) #'b]
+    [(_ b:expr [dr:expr dc:expr f:expr] . more:expr)
+     #'(place-at* (place-at b dr dc f) . more)]))
 
-(define (frame r #:style [s #f] #:fg [f #f] #:bg [b #f])
+(define (frame #:style [s #f] #:fg [f #f] #:bg [b #f] r)
   (match-define (rart w h _) r)
   (place-at
    (with-drawing s f b
@@ -141,13 +131,49 @@
       (happend (vline  h) (blank w h) (vline  h))
       (happend (char #\└) (hline w  ) (char #\┘))))
    1 1 r))
+
+(define (inset dw dh r)
+  (match-define (rart w h !) r)
+  (rart (+ dw w dw) (+ dh h dh)
+        (λ (r c)
+          (! (+ r dh) (+ c dw)))))
+
+(define (scale w h
+               #:ws [ws 'center]
+               #:hs [hs 'middle]
+               r)
+  (match-define (rart rw rh r!) r)
+  (unless (and (<= rw w) (<= rh h))
+    (error 'scale "Original (~ax~a) must fit inside scaled (~ax~a)"
+           rw rh w h))
+  (rart w h
+        (λ (r c)
+          (r! (match hs
+                ['top r]
+                ['middle (+ r (floor (/ (- h rh) 2)))]
+                ['bottom (+ r (- h rh))])
+              (match ws
+                ['left c]
+                ['center (+ c (floor (/ (- w rw) 2)))]
+                ['right (+ c (- w rw))])))))
+
+;; xxx table (with optional framing)
+;; xxx mask (select a piece of a largest image)
+;; xxx render xexpr-like thing
+;; xxx text... (fit text inside a width)
+;; xxx paragraph (fit text inside a box)
+
 (module+ test
-  (draw 10 10
-        (fg 'blue
-            (frame #:fg 'red
-                   (happend (style 'underline (text "Left"))
-                            (blank 4)
-                            (style 'bold (text "Right"))))))
+  (draw 1 1
+        (scale 80 20
+               #:ws 'right
+               (fg 'blue
+                   (frame #:fg 'red
+                          (inset
+                           4 5
+                           (happend (style 'underline (text "Left"))
+                                    (blank 4)
+                                    (style 'bold (text "Right"))))))))
   (newline))
 
 (provide rart?
@@ -157,5 +183,7 @@
          hline vline
          vappend1 vappend
          happend1 happend
-         place-at
-         frame)
+         place-at place-at*
+         frame
+         inset
+         scale)
