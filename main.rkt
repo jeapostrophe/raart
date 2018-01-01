@@ -35,14 +35,17 @@
 
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
-;; ! : row col -> void
+;; ! : (row col char -> void) row col -> void
 (struct rart (w h !))
-(define (draw row col r)
-  (match-define (rart w h !) r)
+(define (draw row col x)
+  (match-define (rart w h !) x)
   (display (A:dec-soft-terminal-reset))
   (display (A:clear-screen/home))
   (set-drawing-parameters!)
-  (! row col)
+  (! (λ (r c ch)
+       (display (A:goto r c))
+       (display ch))
+     row col)
   (display (A:goto (+ row h) (+ col w))))
 
 (define-syntax (with-maybe-parameterize stx)
@@ -52,27 +55,26 @@
      #'(let ([t (λ () (with-maybe-parameterize m . body))])
          (if v (parameterize ([p v]) (t)) (t)))]))
 
-(define (style s r) (with-drawing  s #f #f r))
-(define (fg    f r) (with-drawing #f  f #f r))
-(define (bg    b r) (with-drawing #f #f  b r))
-(define (with-drawing s f b r)
-  (match-define (rart w h !) r)
-  (rart w h (λ (r c)
+(define (style s x) (with-drawing  s #f #f x))
+(define (fg    f x) (with-drawing #f  f #f x))
+(define (bg    b x) (with-drawing #f #f  b x))
+(define (with-drawing s f b x)
+  (match-define (rart w h !) x)
+  (rart w h (λ (d r c)
               (with-maybe-parameterize ([current-style s]
                                         [current-fg f]
                                         [current-bg b])
                 (set-drawing-parameters!)
-                (! r c))
+                (! d r c))
               (set-drawing-parameters!))))
 
 (define (blank [w 0] [h 1])
   (rart w h void))
 
-;; XXX What if ch is a newline?
 (define (char ch)
   (when (char-iso-control? ch)
     (error 'char "Illegal character: ~v" ch))
-  (rart 1 1 (λ (r c) (display (A:goto r c)) (display ch))))
+  (rart 1 1 (λ (d r c) (d r c ch))))
 
 (define (text s)
   (happend* (map char (string->list s))))
@@ -81,30 +83,30 @@
 (define (vline h)
   (vappend* (make-list h (char #\│))))
 
-(define (vappend1 y x)
+(define (vappend2 y x)
   (match-define (rart xw xh x!) x)
   (match-define (rart yw yh y!) y)
   (unless (= xw yw)
-    (error 'vappend1 "Widths must be equal: ~e vs ~e" xw yw))
+    (error 'vappend2 "Widths must be equal: ~e vs ~e" xw yw))
   (rart xw (+ xh yh)
-        (λ (r c)
-          (x! (+ r  0) c)
-          (y! (+ r xh) c))))
+        (λ (d r c)
+          (x! d (+ r  0) c)
+          (y! d (+ r xh) c))))
 (define (vappend r1 . rs)
-  (foldl vappend1 r1 rs))
+  (foldl vappend2 r1 rs))
 (define (vappend* rs) (apply vappend rs))
 
-(define (happend1 y x)
+(define (happend2 y x)
   (match-define (rart xw xh x!) x)
   (match-define (rart yw yh y!) y)
   (unless (= xh yh)
-    (error 'vappend1 "Heights must be equal: ~e vs ~e" xh yh))
+    (error 'happend2 "Heights must be equal: ~e vs ~e" xh yh))
   (rart (+ xw yw) xh
-        (λ (r c)
-          (x! r (+ c  0))
-          (y! r (+ c xw)))))
+        (λ (d r c)
+          (x! d r (+ c  0))
+          (y! d r (+ c xw)))))
 (define (happend r1 . rs)
-  (foldl happend1 r1 rs))
+  (foldl happend2 r1 rs))
 (define (happend* rs) (apply happend rs))
 
 (define (place-at back dr dc front)
@@ -113,67 +115,191 @@
   (unless (and (<= fw bw) (<= fh bh))
     (error 'place-at "Foreground must fit inside background"))
   (rart bw bh
-        (λ (r c)
-          (b! r c)
-          (f! (+ r dr) (+ c dc)))))
+        (λ (d r c)
+          (b! d r c)
+          (f! d (+ r dr) (+ c dc)))))
 (define-syntax (place-at* stx)
   (syntax-parse stx
     [(_ b:expr) #'b]
     [(_ b:expr [dr:expr dc:expr f:expr] . more:expr)
      #'(place-at* (place-at b dr dc f) . more)]))
 
-(define (frame #:style [s #f] #:fg [f #f] #:bg [b #f] r)
-  (match-define (rart w h _) r)
+(define (frame #:style [s #f] #:fg [f #f] #:bg [b #f] x)
+  (match-define (rart w h _) x)
   (place-at
    (with-drawing s f b
      (vappend
       (happend (char #\┌) (hline w  ) (char #\┐))
       (happend (vline  h) (blank w h) (vline  h))
       (happend (char #\└) (hline w  ) (char #\┘))))
-   1 1 r))
+   1 1 x))
 
-(define (inset dw dh r)
-  (match-define (rart w h !) r)
-  (rart (+ dw w dw) (+ dh h dh)
-        (λ (r c)
-          (! (+ r dh) (+ c dw)))))
+(define (matte-at mw mh @c @r x)
+  (match-define (rart xw xh x!) x)
+  (unless (and (<= (+ xw @c) mw)
+               (<= (+ xh @r) mh))
+    (error 'matte-at "Original (~ax~a) must fit inside matte (~ax~a)"
+           xw xh mw mh))
+  (place-at (blank mw mh) @r @c x))
 
-(define (scale w h
-               #:ws [ws 'center]
-               #:hs [hs 'middle]
-               r)
-  (match-define (rart rw rh r!) r)
-  (unless (and (<= rw w) (<= rh h))
-    (error 'scale "Original (~ax~a) must fit inside scaled (~ax~a)"
-           rw rh w h))
-  (rart w h
-        (λ (r c)
-          (r! (match hs
-                ['top r]
-                ['middle (+ r (floor (/ (- h rh) 2)))]
-                ['bottom (+ r (- h rh))])
-              (match ws
-                ['left c]
-                ['center (+ c (floor (/ (- w rw) 2)))]
-                ['right (+ c (- w rw))])))))
+(define (translate dr dc x)
+  (match-define (rart xw xh x!) x)
+  (matte-at (+ xw dc) (+ xh dr) dc dr x))
 
-;; xxx table (with optional framing)
-;; xxx mask (select a piece of a largest image)
+(define (matte w h
+               #:halign [ws 'center]
+               #:valign [hs 'center]
+               x)
+  (match-define (rart xw xh x!) x)
+  (unless (and (<= xw w) (<= xh h))
+    (error 'matte "Original (~ax~a) must fit inside matte (~ax~a)"
+           xw xh w h))
+  (matte-at w h
+            (match ws
+              ['left   0]
+              ['center (floor (/ (- w xw) 2))]
+              ['right  (- w xw)])
+            (match hs
+                ['top    0]
+                ['center (floor (/ (- h xh) 2))]
+                ['bottom (- h xh)])
+            x))
+
+(define (inset dw dh x)
+  (match-define (rart w h !) x)
+  (matte (+ dw w dw) (+ dh h dh)
+         #:halign 'center #:valign 'center
+         x))
+
+(define (mask mc mw mr mh x)
+  (match-define (rart xw xh x!) x)
+  (rart xw xh
+        (λ (d r c)
+          (x!
+           (λ (r c ch)
+             (when (and (<= mr r (+ mr mh))
+                        (<= mc c (+ mc mw)))
+               (d r c ch)))
+           r c))))
+
+(define (crop cc cw cr ch x)
+  (match-define (rart mw mh m!) (mask cc cw cr ch x))
+  (rart cw ch
+        (λ (d r c)
+          (m! (λ (r c ch)
+                (d (- r cr) (- c cc) ch))
+              r c))))
+
+(module+ test
+  (draw 1 1
+        (crop 70 80 10 20
+              (matte 80 20
+                     #:halign 'right
+                     (fg 'blue
+                         (frame #:fg 'red
+                                (inset
+                                 4 5
+                                 (happend (style 'underline (text "Left"))
+                                          (blank 4)
+                                          (style 'bold (text "Right")))))))))
+  (newline))
+
+(define (table rows
+               #:frames? [frames? #t]
+               #:style [s #f] #:fg [f #f] #:bg [b #f]
+               #:inset-dw [dw 0]
+               #:inset-dh [dh 0]
+               #:valign [row-valign 'top]
+               #:halign [halign 'left])
+  (define (list-ref* i l)
+    (cond
+      [(not (pair? l)) l]
+      [(zero? i) (first l)]
+      [else (list-ref* (sub1 i) (rest l))]))
+  (define (col-halign-sel i halign)
+    (match halign
+      [(? symbol?) halign]
+      [(? list?) (list-ref* i halign)]))
+  (define (col-halign col-i)
+    (col-halign-sel col-i halign))
+  (define col-ws
+    (for/list ([i (in-range (length (first rows)))])
+      (define col (map (λ (r) (list-ref r i)) rows))
+      (apply max (map rart-w col))))
+  (define last-col (sub1 (length col-ws)))
+
+  (define (make-bar left middle right)
+    (happend*
+     (cons
+      (char left)
+      (for/list ([col-w (in-list col-ws)]
+                 [col-i (in-naturals)])
+        (happend (hline (+ dw col-w dw))
+                 (if (= last-col col-i)
+                   (char right)
+                   (char middle)))))))
+
+  (define header (make-bar #\┌ #\┬ #\┐))
+  (define footer (make-bar #\└ #\┴ #\┘))
+  (define inbetween (make-bar #\├ #\┼ #\┤))
+  (define last-row (sub1 (length rows)))
+  (vappend*
+   (for/list ([row (in-list rows)]
+              [row-i (in-naturals)])
+     (define row-h (apply max (map rart-h row)))
+     (define cell-h (+ dh row-h dh))
+     (define cell-wall (vline cell-h))
+     (define the-row
+       (happend*
+        (for/list ([col (in-list row)]
+                   [col-w (in-list col-ws)]
+                   [col-i (in-naturals)])
+          (define cell-w (+ dw col-w dw))
+          (define the-cell
+            (matte cell-w #:halign (col-halign col-i)
+                   cell-h #:valign row-valign
+                   (inset dw dh col)))
+          (define cell+left
+            (happend cell-wall the-cell))
+          (if (= col-i last-col)
+            (happend cell+left cell-wall)
+            cell+left))))
+     (define include-header? (zero? row-i))
+     (define row-and-above
+       (if include-header? (vappend header the-row) the-row))
+     (define include-footer? (= row-i last-row))
+     (define row-and-below
+       (vappend row-and-above
+                (if include-footer?
+                  footer
+                  inbetween)))
+     row-and-below)))
+(define (text-rows rows)
+  (local-require racket/format)
+  (for/list ([row (in-list rows)])
+    (for/list ([col (in-list row)])
+      (if (rart? col) col (text (~a col))))))
+
 ;; xxx render xexpr-like thing
 ;; xxx text... (fit text inside a width)
 ;; xxx paragraph (fit text inside a box)
 
 (module+ test
   (draw 1 1
-        (scale 80 20
-               #:ws 'right
-               (fg 'blue
-                   (frame #:fg 'red
-                          (inset
-                           4 5
-                           (happend (style 'underline (text "Left"))
-                                    (blank 4)
-                                    (style 'bold (text "Right"))))))))
+        (translate
+         2 10
+         (table
+          #:frames? #t
+          #:inset-dw 2
+          #:valign 'center
+          #:halign '(right left left left)
+          (text-rows
+           `([  "ID" "First Name" "Last Name" "Grade"]
+             [70022  "John"       "Smith"     "A+"]
+             [   22  "Macumber"   "Stark"     "B"]
+             [ 1223  "Sarah"      ,(vappend (text "Top")
+                                            (text "Mid")
+                                            (text "Bot")) "C"])))))
   (newline))
 
 (provide rart?
@@ -181,9 +307,9 @@
          style fg bg with-drawing
          blank char text
          hline vline
-         vappend1 vappend
-         happend1 happend
+         vappend2 vappend
+         happend2 happend
          place-at place-at*
          frame
-         inset
-         scale)
+         inset matte-at matte translate
+         table text-rows)
