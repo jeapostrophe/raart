@@ -37,10 +37,11 @@
 ;; h : exact-nonnegative-integer?
 ;; ! : (row col char -> void) row col -> void
 (struct rart (w h !))
-(define (draw row col x)
+(define (draw row col x #:clear? [clear? #t])
   (match-define (rart w h !) x)
-  (display (A:dec-soft-terminal-reset))
-  (display (A:clear-screen/home))
+  (display (A:dec-soft-terminal-reset))  
+  (when clear?
+    (display (A:clear-screen/home)))
   (set-drawing-parameters!)
   (! (λ (r c ch)
        (display (A:goto r c))
