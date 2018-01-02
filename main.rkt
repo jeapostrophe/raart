@@ -206,6 +206,7 @@
   (newline))
 
 (define (table rows
+               ;; XXX add more options to frames
                #:frames? [frames? #t]
                #:style [s #f] #:fg [f #f] #:bg [b #f]
                #:inset-dw [dw 0]
@@ -240,9 +241,9 @@
                    (char right)
                    (char middle)))))))
 
-  (define header (make-bar #\┌ #\┬ #\┐))
-  (define footer (make-bar #\└ #\┴ #\┘))
+  (define    header (make-bar #\┌ #\┬ #\┐))
   (define inbetween (make-bar #\├ #\┼ #\┤))
+  (define    footer (make-bar #\└ #\┴ #\┘))
   (define last-row (sub1 (length rows)))
   (vappend*
    (for/list ([row (in-list rows)]
