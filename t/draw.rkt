@@ -2,7 +2,8 @@
 (require raart)
 
 (module+ test
-  (draw (crop 70 80 10 20
+  (draw (crop 1 80 1 20
+              ;;70 80 10 20
               (matte 80 20
                      #:halign 'right
                      (fg 'blue
@@ -14,6 +15,7 @@
                                           (style 'bold (text "Right")))))))))
   (newline))
 
+#;
 (module+ test
   (draw (translate
          2 10

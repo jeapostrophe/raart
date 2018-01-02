@@ -157,14 +157,16 @@
     (error 'matte "Original (~ax~a) must fit inside matte (~ax~a)"
            xw xh w h))
   (matte-at w h
-            (match ws
-              ['left   0]
-              ['center (floor (/ (- w xw) 2))]
-              ['right  (- w xw)])
-            (match hs
-              ['top    0]
-              ['center (floor (/ (- h xh) 2))]
-              ['bottom (- h xh)])
+            (max 1
+                 (match ws
+                   ['left   0]
+                   ['center (floor (/ (- w xw) 2))]
+                   ['right  (- w xw)]))
+            (max 1
+                 (match hs
+                   ['top    0]
+                   ['center (floor (/ (- h xh) 2))]
+                   ['bottom (- h xh)]))
             x))
 
 (define (inset dw dh x)
@@ -268,10 +270,6 @@
   (for/list ([row (in-list rows)])
     (for/list ([col (in-list row)])
       (if (raart? col) col (text (~a col))))))
-
-;; xxx render xexpr-like thing
-;; xxx text... (fit text inside a width)
-;; xxx paragraph (fit text inside a box)
 
 (define style/c (apply or/c (hash-keys symbol->style)))
 (define color/c (apply or/c (hash-keys symbol->color)))

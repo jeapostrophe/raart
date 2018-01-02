@@ -77,9 +77,22 @@
                  (bytes->number col-s))]
         [x (error 'cursor-position "Something weird happened, got ~e" x)]))))
 
+;; xxx xterm-set-window-title
+
+;; xxx Do I make a 'lux chaos' for this?
+;;
+;;     Or do I do the rune thing and make a separation between the
+;;     commands and the keys? Also, how should the mouse events fit
+;;     into that?
+
+;; xxx render xexpr-like thing
+;; xxx text... (fit text inside a width)
+;; xxx paragraph (fit text inside a box)
+
+;; xxx make a "Web" browser
+
 (module+ main
   (with-term
     (λ (t)
       (screen-size t)
       (cursor-position t))))
-
