@@ -105,7 +105,7 @@
            (async-channel-put ch v)
            (loop))))))
   ;; Return
-  (*term alternate? mouse? t ch sig-th input-th 80 24))
+  (*term alternate? mouse? t ch sig-th input-th 24 80))
 
 (struct *term
   (alternate? mouse? t ch sig-th input-th [rows #:mutable] [cols #:mutable])
