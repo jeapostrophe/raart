@@ -14,6 +14,7 @@
            [underline . ,A:style-underline]))
 (define current-fg (make-parameter 'default))
 (define current-bg (make-parameter 'default))
+(define current-display-drawing-parameters? (make-parameter #t))
 (define symbol->color
   `#hasheq(
            [black   .  0] [red       .  1] [green   .  2] [yellow   . 3]
@@ -29,14 +30,19 @@
     (A:select-graphic-rendition A:style-default-background-color)
     (A:select-xterm-256-background-color (hash-ref symbol->color c))))
 (define (set-drawing-parameters!)
-  (display (A:select-graphic-rendition (hash-ref symbol->style (current-style))))
-  (display (select-text-color* (current-fg)))
-  (display (select-background-color* (current-bg))))
+  (when (current-display-drawing-parameters?)
+    (display (get-drawing-parameters))))
+(define (get-drawing-parameters)
+  (string-append
+   (A:select-graphic-rendition (hash-ref symbol->style (current-style)))
+   (select-text-color* (current-fg))
+   (select-background-color* (current-bg))))
 
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
 ;; ! : (row col char -> void) row col -> void
 (struct raart (w h !))
+
 (define (draw x [row 1] [col 1]
               #:clear? [clear? #t])
   (match-define (raart w h !) x)
@@ -49,6 +55,26 @@
        (display ch))
      row col)
   (display (A:goto (+ row h) (+ col w))))
+
+(define (draw-here x)
+  (match-define (raart w h !) x)
+  (define init-dp (get-drawing-parameters))
+  (define def (cons init-dp #\space))
+  (define rows (build-vector h (λ (i) (make-vector w def))))
+  (! (λ (r c ch)
+       (vector-set! (vector-ref rows r) c
+                    (cons (get-drawing-parameters) ch)))
+     0 0)
+  (for/fold ([last-dp init-dp]) ([r (in-vector rows)])
+    (begin0
+        (for/fold ([last-dp last-dp]) ([dp*ch (in-vector r)])
+          (match-define (cons this-dp ch) dp*ch)
+          (unless (string=? this-dp last-dp)
+            (display this-dp))
+          (display ch)
+          this-dp)
+      (newline)))
+  (void))
 
 (define-syntax (with-maybe-parameterize stx)
   (syntax-parse stx
@@ -79,7 +105,9 @@
   (raart 1 1 (λ (d r c) (d r c ch))))
 
 (define (text s)
-  (happend* (map char (string->list s))))
+  (if (string=? s "")
+    (blank)
+    (happend* (map char (string->list s)))))
 (define (hline w)
   (happend* (make-list w (char #\─))))
 (define (vline h)
@@ -140,8 +168,8 @@
   (match-define (raart xw xh x!) x)
   (unless (and (<= (+ xw @c) mw)
                (<= (+ xh @r) mh))
-    (error 'matte-at "Original (~ax~a) must fit inside matte (~ax~a)"
-           xw xh mw mh))
+    (error 'matte-at "Original (~ax~a@~a,~a) must fit inside matte (~ax~a)"
+           xw xh @c @r mw mh))
   (place-at (blank mw mh) @r @c x))
 
 (define (translate dr dc x)
@@ -157,16 +185,14 @@
     (error 'matte "Original (~ax~a) must fit inside matte (~ax~a)"
            xw xh w h))
   (matte-at w h
-            (max 1
-                 (match ws
-                   ['left   0]
-                   ['center (floor (/ (- w xw) 2))]
-                   ['right  (- w xw)]))
-            (max 1
-                 (match hs
-                   ['top    0]
-                   ['center (floor (/ (- h xh) 2))]
-                   ['bottom (- h xh)]))
+            (match ws
+              ['left   0]
+              ['center (floor (/ (- w xw) 2))]
+              ['right  (- w xw)])
+            (match hs
+              ['top    0]
+              ['center (floor (/ (- h xh) 2))]
+              ['bottom (- h xh)])
             x))
 
 (define (inset dw dh x)
@@ -278,6 +304,7 @@
 (provide
  (contract-out
   [raart? (-> any/c boolean?)]
+  [draw-here (-> raart? void?)]
   [draw
    (->* (raart?)
         (exact-positive-integer?

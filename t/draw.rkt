@@ -15,7 +15,6 @@
                                           (style 'bold (text "Right")))))))))
   (newline))
 
-#;
 (module+ test
   (draw (translate
          2 10
