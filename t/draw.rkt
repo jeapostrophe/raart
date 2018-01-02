@@ -2,7 +2,6 @@
 (require racket/format
          raart)
 
-#;
 (module+ test
   (draw (crop 1 80 1 20
               ;;70 80 10 20
@@ -17,7 +16,6 @@
                                           (style 'bold (text "Right")))))))))
   (newline))
 
-#;
 (module+ test
   (draw (translate
          2 10

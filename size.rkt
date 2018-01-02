@@ -78,6 +78,9 @@
         [x (error 'cursor-position "Something weird happened, got ~e" x)]))))
 
 ;; xxx xterm-set-window-title
+#;(begin
+    (display (A:set-mode A:alternate-screen-mode))
+    (display (A:reset-mode A:alternate-screen-mode)))
 
 ;; xxx Do I make a 'lux chaos' for this?
 ;;
