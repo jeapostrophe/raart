@@ -36,10 +36,10 @@
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
 ;; ! : (row col char -> void) row col -> void
-(struct rart (w h !))
+(struct raart (w h !))
 (define (draw x [row 1] [col 1]
               #:clear? [clear? #t])
-  (match-define (rart w h !) x)
+  (match-define (raart w h !) x)
   (display (A:dec-soft-terminal-reset))
   (when clear?
     (display (A:clear-screen/home)))
@@ -61,8 +61,8 @@
 (define (fg    f x) (with-drawing #f  f #f x))
 (define (bg    b x) (with-drawing #f #f  b x))
 (define (with-drawing s f b x)
-  (match-define (rart w h !) x)
-  (rart w h (λ (d r c)
+  (match-define (raart w h !) x)
+  (raart w h (λ (d r c)
               (with-maybe-parameterize ([current-style s]
                                         [current-fg f]
                                         [current-bg b])
@@ -71,12 +71,12 @@
               (set-drawing-parameters!))))
 
 (define (blank [w 0] [h 1])
-  (rart w h void))
+  (raart w h void))
 
 (define (char ch)
   (when (char-iso-control? ch)
     (error 'char "Illegal character: ~v" ch))
-  (rart 1 1 (λ (d r c) (d r c ch))))
+  (raart 1 1 (λ (d r c) (d r c ch))))
 
 (define (text s)
   (happend* (map char (string->list s))))
@@ -86,11 +86,11 @@
   (vappend* (make-list h (char #\│))))
 
 (define (vappend2 y x)
-  (match-define (rart xw xh x!) x)
-  (match-define (rart yw yh y!) y)
+  (match-define (raart xw xh x!) x)
+  (match-define (raart yw yh y!) y)
   (unless (= xw yw)
     (error 'vappend2 "Widths must be equal: ~e vs ~e" xw yw))
-  (rart xw (+ xh yh)
+  (raart xw (+ xh yh)
         (λ (d r c)
           (x! d (+ r  0) c)
           (y! d (+ r xh) c))))
@@ -99,11 +99,11 @@
 (define (vappend* rs) (apply vappend rs))
 
 (define (happend2 y x)
-  (match-define (rart xw xh x!) x)
-  (match-define (rart yw yh y!) y)
+  (match-define (raart xw xh x!) x)
+  (match-define (raart yw yh y!) y)
   (unless (= xh yh)
     (error 'happend2 "Heights must be equal: ~e vs ~e" xh yh))
-  (rart (+ xw yw) xh
+  (raart (+ xw yw) xh
         (λ (d r c)
           (x! d r (+ c  0))
           (y! d r (+ c xw)))))
@@ -112,11 +112,11 @@
 (define (happend* rs) (apply happend rs))
 
 (define (place-at back dr dc front)
-  (match-define (rart bw bh b!) back)
-  (match-define (rart fw fh f!) front)
+  (match-define (raart bw bh b!) back)
+  (match-define (raart fw fh f!) front)
   (unless (and (<= fw bw) (<= fh bh))
     (error 'place-at "Foreground must fit inside background"))
-  (rart bw bh
+  (raart bw bh
         (λ (d r c)
           (b! d r c)
           (f! d (+ r dr) (+ c dc)))))
@@ -127,7 +127,7 @@
      #'(place-at* (place-at b dr dc f) . more)]))
 
 (define (frame #:style [s #f] #:fg [f #f] #:bg [b #f] x)
-  (match-define (rart w h _) x)
+  (match-define (raart w h _) x)
   (place-at
    (with-drawing s f b
      (vappend
@@ -137,7 +137,7 @@
    1 1 x))
 
 (define (matte-at mw mh @c @r x)
-  (match-define (rart xw xh x!) x)
+  (match-define (raart xw xh x!) x)
   (unless (and (<= (+ xw @c) mw)
                (<= (+ xh @r) mh))
     (error 'matte-at "Original (~ax~a) must fit inside matte (~ax~a)"
@@ -145,14 +145,14 @@
   (place-at (blank mw mh) @r @c x))
 
 (define (translate dr dc x)
-  (match-define (rart xw xh x!) x)
+  (match-define (raart xw xh x!) x)
   (matte-at (+ xw dc) (+ xh dr) dc dr x))
 
 (define (matte w h
                #:halign [ws 'center]
                #:valign [hs 'center]
                x)
-  (match-define (rart xw xh x!) x)
+  (match-define (raart xw xh x!) x)
   (unless (and (<= xw w) (<= xh h))
     (error 'matte "Original (~ax~a) must fit inside matte (~ax~a)"
            xw xh w h))
@@ -168,14 +168,14 @@
             x))
 
 (define (inset dw dh x)
-  (match-define (rart w h !) x)
+  (match-define (raart w h !) x)
   (matte (+ dw w dw) (+ dh h dh)
          #:halign 'center #:valign 'center
          x))
 
 (define (mask mc mw mr mh x)
-  (match-define (rart xw xh x!) x)
-  (rart xw xh
+  (match-define (raart xw xh x!) x)
+  (raart xw xh
         (λ (d r c)
           (x!
            (λ (r c ch)
@@ -185,8 +185,8 @@
            r c))))
 
 (define (crop cc cw cr ch x)
-  (match-define (rart mw mh m!) (mask cc cw cr ch x))
-  (rart cw ch
+  (match-define (raart mw mh m!) (mask cc cw cr ch x))
+  (raart cw ch
         (λ (d r c)
           (m! (λ (r c ch)
                 (d (- r cr) (- c cc) ch))
@@ -227,7 +227,7 @@
   (define col-ws
     (for/list ([i (in-range (length (first rows)))])
       (define col (map (λ (r) (list-ref r i)) rows))
-      (apply max (map rart-w col))))
+      (apply max (map raart-w col))))
   (define last-col (sub1 (length col-ws)))
 
   (define (make-bar left middle right)
@@ -248,7 +248,7 @@
   (vappend*
    (for/list ([row (in-list rows)]
               [row-i (in-naturals)])
-     (define row-h (apply max (map rart-h row)))
+     (define row-h (apply max (map raart-h row)))
      (define cell-h (+ dh row-h dh))
      (define cell-wall (vline cell-h))
      (define the-row
@@ -280,7 +280,7 @@
   (local-require racket/format)
   (for/list ([row (in-list rows)])
     (for/list ([col (in-list row)])
-      (if (rart? col) col (text (~a col))))))
+      (if (raart? col) col (text (~a col))))))
 
 ;; xxx render xexpr-like thing
 ;; xxx text... (fit text inside a width)
@@ -303,7 +303,7 @@
                                             (text "Bot")) "C"])))))
   (newline))
 
-(provide rart?
+(provide raart?
          draw
          style fg bg with-drawing
          blank char text
