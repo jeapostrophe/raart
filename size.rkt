@@ -90,6 +90,7 @@
 ;; xxx paragraph (fit text inside a box)
 
 ;; xxx make a "Web" browser
+;; xxx use if-drawn to figure out what links are on screen
 
 (module+ main
   (with-term

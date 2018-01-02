@@ -6,6 +6,8 @@
                      syntax/parse)
          (prefix-in A: ansi))
 
+(define (strict-or a b) (or a b))
+
 (define current-style (make-parameter 'normal))
 (define symbol->style
   `#hasheq([normal . ,A:style-normal]
@@ -40,7 +42,7 @@
 
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
-;; ! : (row col char -> void) row col -> void
+;; ! : (row col char -> void) row col -> bool
 (struct raart (w h !))
 
 (define (draw x [row 1] [col 1]
@@ -52,7 +54,8 @@
   (set-drawing-parameters!)
   (! (λ (r c ch)
        (display (A:goto r c))
-       (display ch))
+       (display ch)
+       #t)
      row col)
   (display (A:goto (+ row h) (+ col w))))
 
@@ -63,7 +66,8 @@
   (define rows (build-vector h (λ (i) (make-vector w def))))
   (! (λ (r c ch)
        (vector-set! (vector-ref rows r) c
-                    (cons (get-drawing-parameters) ch)))
+                    (cons (get-drawing-parameters) ch))
+       #t)
      0 0)
   (for/fold ([last-dp init-dp]) ([r (in-vector rows)])
     (begin0
@@ -89,12 +93,13 @@
 (define (with-drawing s f b x)
   (match-define (raart w h !) x)
   (raart w h (λ (d r c)
-               (with-maybe-parameterize ([current-style s]
-                                         [current-fg f]
-                                         [current-bg b])
-                 (set-drawing-parameters!)
-                 (! d r c))
-               (set-drawing-parameters!))))
+               (begin0
+                   (with-maybe-parameterize ([current-style s]
+                                             [current-fg f]
+                                             [current-bg b])
+                     (set-drawing-parameters!)
+                     (! d r c))
+                 (set-drawing-parameters!)))))
 
 (define (blank [w 0] [h 1])
   (raart w h void))
@@ -104,41 +109,6 @@
     (error 'char "Illegal character: ~v" ch))
   (raart 1 1 (λ (d r c) (d r c ch))))
 
-(define (text s)
-  (if (string=? s "")
-    (blank)
-    (happend* (map char (string->list s)))))
-(define (hline w)
-  (happend* (make-list w (char #\─))))
-(define (vline h)
-  (vappend* (make-list h (char #\│))))
-
-(define (vappend2 y x)
-  (match-define (raart xw xh x!) x)
-  (match-define (raart yw yh y!) y)
-  (unless (= xw yw)
-    (error 'vappend2 "Widths must be equal: ~e vs ~e" xw yw))
-  (raart xw (+ xh yh)
-         (λ (d r c)
-           (x! d (+ r  0) c)
-           (y! d (+ r xh) c))))
-(define (vappend r1 . rs)
-  (foldl vappend2 r1 rs))
-(define (vappend* rs) (apply vappend rs))
-
-(define (happend2 y x)
-  (match-define (raart xw xh x!) x)
-  (match-define (raart yw yh y!) y)
-  (unless (= xh yh)
-    (error 'happend2 "Heights must be equal: ~e vs ~e" xh yh))
-  (raart (+ xw yw) xh
-         (λ (d r c)
-           (x! d r (+ c  0))
-           (y! d r (+ c xw)))))
-(define (happend r1 . rs)
-  (foldl happend2 r1 rs))
-(define (happend* rs) (apply happend rs))
-
 (define (place-at back dr dc front)
   (match-define (raart bw bh b!) back)
   (match-define (raart fw fh f!) front)
@@ -146,23 +116,14 @@
     (error 'place-at "Foreground must fit inside background"))
   (raart bw bh
          (λ (d r c)
-           (b! d r c)
-           (f! d (+ r dr) (+ c dc)))))
+           (strict-or
+            (b! d r c)
+            (f! d (+ r dr) (+ c dc))))))
 (define-syntax (place-at* stx)
   (syntax-parse stx
     [(_ b:expr) #'b]
     [(_ b:expr [dr:expr dc:expr f:expr] . more:expr)
      #'(place-at* (place-at b dr dc f) . more)]))
-
-(define (frame #:style [s #f] #:fg [f #f] #:bg [b #f] x)
-  (match-define (raart w h _) x)
-  (place-at
-   (with-drawing s f b
-     (vappend
-      (happend (char #\┌) (hline w  ) (char #\┐))
-      (happend (vline  h) (blank w h) (vline  h))
-      (happend (char #\└) (hline w  ) (char #\┘))))
-   1 1 x))
 
 (define (matte-at mw mh @c @r x)
   (match-define (raart xw xh x!) x)
@@ -207,9 +168,9 @@
          (λ (d r c)
            (x!
             (λ (r c ch)
-              (when (and (<= mr r (+ mr mh))
-                         (<= mc c (+ mc mw)))
-                (d r c ch)))
+              (and (<= mr r) (< r (+ mr mh))
+                   (<= mc c) (< c (+ mc mw))
+                   (d r c ch)))
             r c))))
 
 (define (crop cc cw cr ch x)
@@ -219,6 +180,75 @@
            (m! (λ (r c ch)
                  (d (- r cr) (- c cc) ch))
                r c))))
+
+(define (*vappend2 y x)
+  (match-define (raart xw xh x!) x)
+  (match-define (raart yw yh y!) y)
+  (unless (= xw yw)
+    (error '*vappend2 "Widths must be equal: ~e vs ~e" xw yw))
+  (raart xw (+ xh yh)
+         (λ (d r c)
+           (strict-or
+            (x! d (+ r  0) c)
+            (y! d (+ r xh) c)))))
+(define (vappend2 y x #:halign [halign #f])
+  (cond
+    [(not halign) (*vappend2 y x)]
+    [else
+     (match-define (raart xw xh x!) x)
+     (match-define (raart yw yh y!) y)
+     (define nw (max xw yw))
+     (define xp (matte nw xh #:halign halign x))
+     (define yp (matte nw yh #:halign halign y))
+     (*vappend2 yp xp)]))
+(define (vappend #:halign [halign #f] r1 . rs)
+  (foldl (λ (a d) (vappend2 #:halign halign a d)) r1 rs))
+(define (vappend* #:halign [halign #f] rs)
+  (apply vappend rs #:halign halign))
+
+(define (*happend2 y x)
+  (match-define (raart xw xh x!) x)
+  (match-define (raart yw yh y!) y)
+  (unless (= xh yh)
+    (error '*happend2 "Heights must be equal: ~e vs ~e" xh yh))
+  (raart (+ xw yw) xh
+         (λ (d r c)
+           (strict-or
+            (x! d r (+ c  0))
+            (y! d r (+ c xw))))))
+(define (happend2 y x #:valign [valign #f])
+  (cond
+    [(not valign) (*happend2 y x)]
+    [else
+     (match-define (raart xw xh x!) x)
+     (match-define (raart yw yh y!) y)
+     (define nh (max xh yh))
+     (define xp (matte xw nh #:valign valign x))
+     (define yp (matte yw nh #:valign valign y))
+     (*happend2 yp xp)]))
+(define (happend #:valign [valign #f] r1 . rs)
+  (foldl (λ (a d) (happend2 #:valign valign a d)) r1 rs))
+(define (happend* #:valign [valign #f] rs)
+  (apply happend rs #:valign valign))
+
+(define (text s)
+  (if (string=? s "")
+    (blank)
+    (happend* (map char (string->list s)))))
+(define (hline w)
+  (happend* (make-list w (char #\─))))
+(define (vline h)
+  (vappend* (make-list h (char #\│))))
+
+(define (frame #:style [s #f] #:fg [f #f] #:bg [b #f] x)
+  (match-define (raart w h _) x)
+  (place-at
+   (with-drawing s f b
+     (vappend
+      (happend (char #\┌) (hline w  ) (char #\┐))
+      (happend (vline  h) (blank w h) (vline  h))
+      (happend (char #\└) (hline w  ) (char #\┘))))
+   1 1 x))
 
 (define (table rows
                ;; XXX add more options to frames
@@ -297,6 +327,13 @@
     (for/list ([col (in-list row)])
       (if (raart? col) col (text (~a col))))))
 
+(define (if-drawn f x)
+  (match-define (raart w h !) x)
+  (raart w h (λ (d r c)
+               (define ? (! d r c))
+               (when ? (f))
+               ?)))
+
 (define style/c (apply or/c (hash-keys symbol->style)))
 (define color/c (apply or/c (hash-keys symbol->color)))
 (define valign/c (or/c 'top 'center 'bottom))
@@ -326,12 +363,12 @@
   [text (-> string? raart?)]
   [hline (-> exact-nonnegative-integer? raart?)]
   [vline (-> exact-nonnegative-integer? raart?)]
-  [vappend2 (-> raart? raart? raart?)]
-  [vappend (->* (raart?) () #:rest (listof raart?) raart?)]
-  [vappend* (-> (non-empty-listof raart?) raart?)]
-  [happend2 (-> raart? raart? raart?)]
-  [happend (->* (raart?) () #:rest (listof raart?) raart?)]
-  [happend* (-> (non-empty-listof raart?) raart?)]
+  [vappend2 (->* (raart? raart?) (#:halign (or/c halign/c #f)) raart?)]
+  [vappend (->* (raart?) (#:halign (or/c halign/c #f)) #:rest (listof raart?) raart?)]
+  [vappend* (->* ((non-empty-listof raart?)) (#:halign (or/c halign/c #f)) raart?)]
+  [happend2 (->* (raart? raart?) (#:valign (or/c valign/c #f)) raart?)]
+  [happend (->* (raart?) (#:valign (or/c valign/c #f)) #:rest (listof raart?) raart?)]
+  [happend* (->* ((non-empty-listof raart?)) (#:valign (or/c valign/c #f)) raart?)]
   [place-at (-> raart? exact-nonnegative-integer? exact-nonnegative-integer? raart?
                 raart?)]
   [frame (->* (raart?)
@@ -366,5 +403,6 @@
                #:halign (or/c halign/c (list*of halign/c (or/c halign/c '()))))
               raart?)]
   [text-rows (-> (listof (listof any/c))
-                 (listof (listof raart?)))])
+                 (listof (listof raart?)))]
+  [if-drawn (-> (-> any) raart? raart?)])
  place-at*)

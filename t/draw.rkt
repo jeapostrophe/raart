@@ -1,6 +1,8 @@
 #lang racket/base
-(require raart)
+(require racket/format
+         raart)
 
+#;
 (module+ test
   (draw (crop 1 80 1 20
               ;;70 80 10 20
@@ -15,6 +17,7 @@
                                           (style 'bold (text "Right")))))))))
   (newline))
 
+#;
 (module+ test
   (draw (translate
          2 10
@@ -31,3 +34,16 @@
                                             (text "Mid")
                                             (text "Bot")) "C"])))))
   (newline))
+
+(module+ test
+  (define seen? (list))
+  (draw-here
+   (crop 0 80 70 10
+         (vappend*
+          #:halign 'left
+          (for/list ([i (in-range 80)])
+            (if-drawn
+             (λ () (set! seen? (cons i seen?)))
+             (text (~a "Row " i)))))))
+  (newline)
+  (printf "Drawn: ~v\n" (reverse seen?)))
