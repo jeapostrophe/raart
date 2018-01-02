@@ -16,7 +16,8 @@
            [underline . ,A:style-underline]))
 (define current-fg (make-parameter 'default))
 (define current-bg (make-parameter 'default))
-(define current-display-drawing-parameters? (make-parameter #t))
+(define current-display-drawing-parameters?
+  (make-parameter (current-output-port)))
 (define symbol->color
   `#hasheq(
            [black   .  0] [red       .  1] [green   .  2] [yellow   . 3]
@@ -32,8 +33,9 @@
     (A:select-graphic-rendition A:style-default-background-color)
     (A:select-xterm-256-background-color (hash-ref symbol->color c))))
 (define (set-drawing-parameters!)
-  (when (current-display-drawing-parameters?)
-    (display (get-drawing-parameters))))
+  (cond
+    [(current-display-drawing-parameters?)
+     => (λ (op) (display (get-drawing-parameters) op))]))
 (define (get-drawing-parameters)
   (string-append
    (A:select-graphic-rendition (hash-ref symbol->style (current-style)))
@@ -45,39 +47,43 @@
 ;; ! : (row col char -> void) row col -> bool
 (struct raart (w h !))
 
-(define (draw x [row 1] [col 1]
+(define (draw x
+              #:output [op (current-output-port)]
               #:clear? [clear? #t])
   (match-define (raart w h !) x)
-  (display (A:dec-soft-terminal-reset))
+  (display (A:dec-soft-terminal-reset) op)
   (when clear?
-    (display (A:clear-screen/home)))
-  (set-drawing-parameters!)
-  (! (λ (r c ch)
-       (display (A:goto r c))
-       (display ch)
-       #t)
-     row col)
-  (display (A:goto (+ row h) (+ col w))))
+    (display (A:clear-screen/home) op))
+  (parameterize ([current-display-drawing-parameters? op])
+    (set-drawing-parameters!)
+    (! (λ (r c ch)
+         (display (A:goto r c) op)
+         (when ch (display ch op))
+         #t)
+       1 1))
+  (flush-output op))
 
-(define (draw-here x)
+(define (draw-here x #:output [op (current-output-port)])
   (match-define (raart w h !) x)
   (define init-dp (get-drawing-parameters))
   (define def (cons init-dp #\space))
   (define rows (build-vector h (λ (i) (make-vector w def))))
-  (! (λ (r c ch)
-       (vector-set! (vector-ref rows r) c
-                    (cons (get-drawing-parameters) ch))
-       #t)
-     0 0)
+  (parameterize ([current-display-drawing-parameters? #f])
+    (! (λ (r c ch)
+         (vector-set! (vector-ref rows r) c
+                      (cons (get-drawing-parameters) ch))
+         #t)
+       0 0))
   (for/fold ([last-dp init-dp]) ([r (in-vector rows)])
     (begin0
         (for/fold ([last-dp last-dp]) ([dp*ch (in-vector r)])
           (match-define (cons this-dp ch) dp*ch)
           (unless (string=? this-dp last-dp)
-            (display this-dp))
-          (display ch)
+            (display this-dp op))
+          (display ch op)
           this-dp)
-      (newline)))
+      (newline op)))
+  (flush-output op)
   (void))
 
 (define-syntax (with-maybe-parameterize stx)
@@ -334,6 +340,12 @@
                (when ? (f))
                ?)))
 
+(define (place-cursor-after x cr cc)
+  (match-define (raart w h !) x)
+  (raart w h (λ (d r c)
+               (strict-or (! d r c)
+                          (d cr cc #f)))))
+
 (define style/c (apply or/c (hash-keys symbol->style)))
 (define color/c (apply or/c (hash-keys symbol->color)))
 (define valign/c (or/c 'top 'center 'bottom))
@@ -341,12 +353,13 @@
 (provide
  (contract-out
   [raart? (-> any/c boolean?)]
-  [draw-here (-> raart? void?)]
   [draw
    (->* (raart?)
-        (exact-positive-integer?
-         exact-positive-integer?
+        (#:output output-port?
          #:clear? boolean?)
+        void?)]
+  [draw-here
+   (->* (raart?) (#:output output-port?)
         void?)]
   [style/c contract?]
   [style (-> style/c raart? raart?)]
@@ -404,5 +417,8 @@
               raart?)]
   [text-rows (-> (listof (listof any/c))
                  (listof (listof raart?)))]
-  [if-drawn (-> (-> any) raart? raart?)])
+  [if-drawn (-> (-> any) raart? raart?)]
+  [place-cursor-after
+   (-> raart? exact-positive-integer? exact-positive-integer?
+       raart?)])
  place-at*)
