@@ -37,9 +37,10 @@
 ;; h : exact-nonnegative-integer?
 ;; ! : (row col char -> void) row col -> void
 (struct rart (w h !))
-(define (draw row col x #:clear? [clear? #t])
+(define (draw x [row 1] [col 1]
+              #:clear? [clear? #t])
   (match-define (rart w h !) x)
-  (display (A:dec-soft-terminal-reset))  
+  (display (A:dec-soft-terminal-reset))
   (when clear?
     (display (A:clear-screen/home)))
   (set-drawing-parameters!)
@@ -161,9 +162,9 @@
               ['center (floor (/ (- w xw) 2))]
               ['right  (- w xw)])
             (match hs
-                ['top    0]
-                ['center (floor (/ (- h xh) 2))]
-                ['bottom (- h xh)])
+              ['top    0]
+              ['center (floor (/ (- h xh) 2))]
+              ['bottom (- h xh)])
             x))
 
 (define (inset dw dh x)
@@ -192,8 +193,7 @@
               r c))))
 
 (module+ test
-  (draw 1 1
-        (crop 70 80 10 20
+  (draw (crop 70 80 10 20
               (matte 80 20
                      #:halign 'right
                      (fg 'blue
@@ -286,8 +286,7 @@
 ;; xxx paragraph (fit text inside a box)
 
 (module+ test
-  (draw 1 1
-        (translate
+  (draw (translate
          2 10
          (table
           #:frames? #t
