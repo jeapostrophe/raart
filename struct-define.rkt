@@ -19,7 +19,7 @@
        (define field-name-s
          (substring field-ref-s struct+-len))
        (define field-name
-         (datum->syntax stx (string->symbol field-name-s)))
+         (datum->syntax #'the-instance (string->symbol field-name-s)))
        (list field-name field-ref field-set))
      #:with (field-val-id ...)
      (generate-temporaries #'(field-name ...))
@@ -40,4 +40,9 @@
                            (field-ref the-instance-id))]))))
               ...))]))
 
-(provide struct-define)
+(define-syntax-rule (define-struct-define the-struct the-struct-define)
+  (define-syntax-rule (the-struct-define instance-id)
+    (struct-define the-struct instance-id)))
+
+(provide struct-define
+         define-struct-define)

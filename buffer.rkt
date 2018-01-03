@@ -40,15 +40,15 @@
                               #:clear? [clear? #t]
                               #:output [op (current-output-port)])
   (terminal-buffer clear? op term-rows term-cols))
+(define-struct-define terminal-buffer terminal-buffer-define)
 (struct terminal-buffer (clear? op [term-rows #:mutable] [term-cols #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
-     (set-terminal-buffer-term-rows! buf new-rows)
-     (set-terminal-buffer-term-cols! buf new-cols))
+     (terminal-buffer-define buf)
+     (set! term-rows new-rows)
+     (set! term-cols new-cols))
    (define (buffer-start! buf draw-rows draw-cols)
-     (define op (terminal-buffer-op buf))
-     (define ok-rows (terminal-buffer-term-rows buf))
-     (define ok-cols (terminal-buffer-term-cols buf))
+     (terminal-buffer-define buf)
      (define-syntax-rule
        (maybe-update last-X X select-X)
        (unless (eq? last-X X)
@@ -65,13 +65,13 @@
      (define cur-r 1)
      (define cur-c 1)
      (values
-      ok-rows ok-cols
+      term-rows term-cols
       (λ (s f b r c ch)
         (cond
           [(or (< r 0)
-               (<= ok-rows r)
+               (<= term-rows r)
                (< c 0)
-               (<= ok-cols c))
+               (<= term-cols c))
            #f]
           [else
            (maybe-update last-s s select-style*)
@@ -92,7 +92,7 @@
 
            #t]))))
    (define (buffer-commit! buf)
-     (define op (terminal-buffer-op buf))
+     (terminal-buffer-define buf)
      (display (A:show-cursor) op)
      (flush-output op))])
 
@@ -143,18 +143,19 @@
 
 (define (make-output-buffer #:output [op (current-output-port)])
   (output-buffer op (make-cells 0 0)))
+(define-struct-define output-buffer output-buffer-define)
 (struct output-buffer (op [cells #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
-     (struct-define output-buffer buf)
+     (output-buffer-define buf)
      (set! cells (maybe-make-cells cells new-rows new-cols)))
    (define (buffer-start! buf draw-rows draw-cols)
-     (struct-define output-buffer buf)
+     (output-buffer-define buf)
      (buffer-resize! buf draw-rows draw-cols)
      (clear-cells! cells)
      (values draw-rows draw-cols (draw-cell! cells)))
    (define (buffer-commit! buf)
-     (struct-define output-buffer buf)
+     (output-buffer-define buf)
      (for/fold ([last-s 'normal] [last-f #f] [last-b #f])
                ([row (in-vector (cells-vec cells))])
        (begin0
@@ -186,6 +187,7 @@
    (make-cells term-rows term-cols)
    (make-cells term-rows term-cols)
    0 0))
+(define-struct-define cached-buffer cached-buffer-define)
 (struct cached-buffer
   ([clear-next? #:mutable]
    term-nclear term-yclear
@@ -198,39 +200,30 @@
    (define/generic super-buffer-commit! buffer-commit!)
 
    (define (buffer-resize! buf new-rows new-cols)
-     (set-cached-buffer-clear-next?! buf #t)
-     (super-buffer-resize! (cached-buffer-term-nclear buf) new-rows new-cols)
-     (super-buffer-resize! (cached-buffer-term-yclear buf) new-rows new-cols)
-     (set-cached-buffer-term-rows! buf new-rows)
-     (set-cached-buffer-term-cols! buf new-cols)
-     (clear-cells! (cached-buffer-cur-cells buf)))
+     (cached-buffer-define buf)
+     (set! clear-next? #t)
+     (super-buffer-resize! term-nclear new-rows new-cols)
+     (super-buffer-resize! term-yclear new-rows new-cols)
+     (set! term-rows new-rows)
+     (set! term-cols new-cols)
+     (clear-cells! cur-cells))
    (define (buffer-start! buf draw-rows draw-cols)
-     (define ok-rows (cached-buffer-term-rows buf))
-     (define ok-cols (cached-buffer-term-cols buf))
-     (define cs (cached-buffer-new-cells buf))
-     (clear-cells! cs)
-     (define dc (draw-cell! cs))
-     (values ok-rows ok-cols
+     (cached-buffer-define buf)
+     (clear-cells! new-cells)
+     (define dc (draw-cell! new-cells))
+     (values term-rows term-cols
              (λ (s f b r c ch)
-               (set-cached-buffer-last-row! buf r)
-               (set-cached-buffer-last-col! buf c)
+               (set! last-row r)
+               (set! last-col c)
                (dc s f b r c ch))))
    (define (buffer-commit! buf)
-     (define ok-rows (cached-buffer-term-rows buf))
-     (define ok-cols (cached-buffer-term-cols buf))
-     (define cur-cs (cached-buffer-cur-cells buf))
-     (define new-cs (cached-buffer-new-cells buf))
-     (define inner-buf
-       (cond
-         [(cached-buffer-clear-next? buf)
-          (set-cached-buffer-clear-next?! buf #f)
-          (cached-buffer-term-yclear buf)]
-         [else
-          (cached-buffer-term-nclear buf)]))
-     (define-values (_ok-rows _ok-cols draw!)
-       (super-buffer-start! inner-buf ok-rows ok-cols))
-     (for ([cur-row (in-vector (cells-vec cur-cs))]
-           [new-row (in-vector (cells-vec new-cs))]
+     (cached-buffer-define buf)
+     (define inner-buf (if clear-next? term-yclear term-nclear))
+     (set! clear-next? #f)
+     (define-values (ok-rows ok-cols draw!)
+       (super-buffer-start! inner-buf term-rows term-cols))
+     (for ([cur-row (in-vector (cells-vec cur-cells))]
+           [new-row (in-vector (cells-vec new-cells))]
            [r (in-naturals)])
        (for ([cur-cell (in-vector cur-row)]
              [new-cell (in-vector new-row)]
@@ -239,13 +232,14 @@
            (match-define (output-cell _ _ _ cur-ch) cur-cell)
            (match-define (output-cell s f b new-ch) new-cell)
            (draw! s f b r c (or new-ch #\space)))))
-     (draw! 'normal #f #f
-            (cached-buffer-last-row buf)
-            (cached-buffer-last-col buf)
-            #f)
+     (draw! 'normal #f #f last-row last-col #f)
      (super-buffer-commit! inner-buf)
-     (set-cached-buffer-cur-cells! buf new-cs)
-     (set-cached-buffer-new-cells! buf cur-cs))])
+     (swap! new-cells cur-cells))])
+
+(define-syntax-rule (swap! x y)
+  (let ([tmp x])
+    (set! x y)
+    (set! y tmp)))
 
 (provide
  (contract-out
