@@ -54,6 +54,7 @@
   (display (A:dec-soft-terminal-reset) op)
   (when clear?
     (display (A:clear-screen/home) op))
+  (display (A:hide-cursor))
   (parameterize ([current-display-drawing-parameters? op])
     (set-drawing-parameters!)
     (! (λ (r c ch)
@@ -61,6 +62,7 @@
          (when ch (display ch op))
          #t)
        1 1))
+  (display (A:show-cursor))
   (flush-output op))
 
 (define (draw-here x #:output [op (current-output-port)])

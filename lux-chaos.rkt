@@ -72,8 +72,9 @@
   (string-append (reset-mode x11-extended-mouse-tracking-mode)
                  (reset-mode x11-any-event-mouse-tracking-mode)
                  (reset-mode x11-focus-event-mode)))
-(define (make-raart #:alternate? [alternate? #f]
-                    #:mouse? [mouse? #f])
+(define (make-raart #:mouse? [mouse? #f])
+  (define alternate? #t)
+  
   (define t (open-term))
   (define ch (make-async-channel))
   ;; Initialize term
@@ -85,6 +86,7 @@
                         (lambda (handle)
                           (display/term t x11-mouse-off))))
   ;; Register for window change events
+  ;; XXX some way to force this to be first
   (display/term t (device-request-screen-size))
   (capture-signal! 'SIGWINCH)
   (define sig-th
@@ -120,8 +122,8 @@
                    [e e])))
    (define (chaos-output! c o)
      (when o
-       (draw (crop 0 (*term-cols c)
-                   0 (*term-rows c)
+       (draw (crop 0 (add1 (*term-cols c))
+                   0 (add1 (*term-rows c))
                    o)
              #:output (term-out (*term-t c)))))
    (define (chaos-label! c l)
@@ -140,4 +142,4 @@
 (provide
  (contract-out
   [make-raart
-   (->* () (#:alternate? boolean?) chaos?)]))
+   (->* () () chaos?)]))
