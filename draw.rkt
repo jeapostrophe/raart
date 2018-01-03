@@ -18,101 +18,128 @@
      #'(let ([t (λ () (with-maybe-parameterize m . body))])
          (if v (parameterize ([p v]) (t)) (t)))]))
 
+(define (rectangle-intersect a-x1 a-y1
+                             a-x2 a-y2
+                             b-x1 b-y1
+                             b-x2 b-y2)
+  (and (< a-x1 b-x2)
+       (> a-x2 b-x1)
+       (< a-y1 b-y2)
+       (> a-y2 b-y1)))
+
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
-;; ! : (row col char -> void) row col -> bool
+;; ! : okay? (row col char -> void) row col -> bool
 (struct raart (w h !))
 
 (define (draw buf x)
   (match-define (raart w h !) x)
-  (define draw-char! (buffer-start! buf h w))
-  (! (λ (r c ch)
-       (draw-char! (current-style) (current-fg) (current-bg)
-                   r c ch))
-     0 0)
+  (define-values
+    (max-rows max-cols draw-char!)
+    (buffer-start! buf h w))
+  (define (draw-with-params r c ch)
+    (draw-char! (current-style) (current-fg) (current-bg)
+                r c ch))
+  (define (on-screen? w h r c)
+    (rectangle-intersect 0 0
+                         max-cols max-rows
+                         c r
+                         (+ c w) (+ r h)))
+  (! on-screen? draw-with-params 0 0)
   (buffer-commit! buf))
+
+(define (raart* w h !)
+  (raart w h
+         (λ (okay? d r c)
+           (and (okay? w h r c)
+                (! okay? d r c)))))
 
 ;; Core forms
 (define (with-drawing s f b x)
   (match-define (raart w h !) x)
-  (raart w h (λ (d r c)
-               (with-maybe-parameterize ([current-style s]
-                                         [current-fg f]
-                                         [current-bg b])
-                 (! d r c)))))
+  (raart* w h (λ (okay? d r c)
+                (with-maybe-parameterize ([current-style s]
+                                          [current-fg f]
+                                          [current-bg b])
+                  (! okay? d r c)))))
 
 (define (blank [w 0] [h 1])
-  (raart w h (λ (d r c) #f)))
+  (raart* w h (λ (okay? d r c) #f)))
 
 (define (char ch)
   (when (char-iso-control? ch)
     (error 'char "Illegal character: ~v" ch))
-  (raart 1 1 (λ (d r c) (d r c ch))))
+  (raart* 1 1 (λ (okay? d r c) (d r c ch))))
 
 (define (place-at back dr dc front)
   (match-define (raart bw bh b!) back)
   (match-define (raart fw fh f!) front)
   (unless (and (<= fw bw) (<= fh bh))
     (error 'place-at "Foreground must fit inside background"))
-  (raart bw bh
-         (λ (d r c)
-           (strict-or
-            (b! d r c)
-            (f! d (+ r dr) (+ c dc))))))
+  (raart* bw bh
+          (λ (okay? d r c)
+            (strict-or
+             (b! okay? d r c)
+             (f! okay? d (+ r dr) (+ c dc))))))
 
 (define (mask mc mw mr mh x)
   (match-define (raart xw xh x!) x)
-  (raart xw xh
-         (λ (d r c)
-           (x!
-            (λ (r c ch)
-              (and (<= mr r) (< r (+ mr mh))
-                   (<= mc c) (< c (+ mc mw))
-                   (d r c ch)))
-            r c))))
+  (raart* xw xh
+          (λ (okay? d r c)
+            (x!
+             (λ (w h r c)
+               (and (okay? w h r c)
+                    (rectangle-intersect mc mr
+                                         (+ mc mw) (+ mr mh)
+                                         c r
+                                         (+ c w) (+ r h))))
+             d r c))))
 
 (define (crop cc cw cr ch x)
-  (match-define (raart mw mh m!) (mask cc cw cr ch x))
-  (raart cw ch
-         (λ (d r c)
-           (m! (λ (r c ch)
-                 (d (- r cr) (- c cc) ch))
-               r c))))
+  (define mx (mask cc cw cr ch x))
+  (match-define (raart mw mh m!) mx)
+  (raart* cw ch
+          (λ (okay? d r c)
+            (m! (λ (w h r c)
+                  (okay? w h (- r cr) (- c cc)))
+                (λ (r c ch)
+                  (d (- r cr) (- c cc) ch))
+                r c))))
 
 (define (if-drawn f x)
   (match-define (raart w h !) x)
-  (raart w h (λ (d r c)
-               (define ? (! d r c))
-               (when ? (f))
-               ?)))
+  (raart* w h (λ (okay? d r c)
+                (define ? (! okay? d r c))
+                (when ? (f))
+                ?)))
 
 (define (place-cursor-after x cr cc)
   (match-define (raart w h !) x)
-  (raart w h (λ (d r c)
-               (strict-or (! d r c)
-                          (d cr cc #f)))))
+  (raart* w h (λ (okay? d r c)
+                (strict-or (! okay? d r c)
+                           (d cr cc #f)))))
 
 (define (*vappend2 y x)
   (match-define (raart xw xh x!) x)
   (match-define (raart yw yh y!) y)
   (unless (= xw yw)
     (error '*vappend2 "Widths must be equal: ~e vs ~e" xw yw))
-  (raart xw (+ xh yh)
-         (λ (d r c)
-           (strict-or
-            (x! d (+ r  0) c)
-            (y! d (+ r xh) c)))))
+  (raart* xw (+ xh yh)
+          (λ (okay? d r c)
+            (strict-or
+             (x! okay? d (+ r  0) c)
+             (y! okay? d (+ r xh) c)))))
 
 (define (*happend2 y x)
   (match-define (raart xw xh x!) x)
   (match-define (raart yw yh y!) y)
   (unless (= xh yh)
     (error '*happend2 "Heights must be equal: ~e vs ~e" xh yh))
-  (raart (+ xw yw) xh
-         (λ (d r c)
-           (strict-or
-            (x! d r (+ c  0))
-            (y! d r (+ c xw))))))
+  (raart* (+ xw yw) xh
+          (λ (okay? d r c)
+            (strict-or
+             (x! okay? d r (+ c  0))
+             (y! okay? d r (+ c xw))))))
 
 ;; Library
 (define (style s x) (with-drawing  s #f #f x))

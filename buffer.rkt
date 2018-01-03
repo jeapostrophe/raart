@@ -66,31 +66,33 @@
      (define last-b #f)
      (define cur-r 1)
      (define cur-c 1)
-     (λ (s f b r c ch)
-       (cond
-         [(or (< r 0)
-              (<= ok-rows r)
-              (< c 0)
-              (<= ok-cols c))
-          #f]
-         [else
-          (maybe-update last-s s select-style*)
-          (maybe-update last-f f select-text-color*)
-          (maybe-update last-b b select-background-color*)
+     (values
+      ok-rows ok-cols
+      (λ (s f b r c ch)
+        (cond
+          [(or (< r 0)
+               (<= ok-rows r)
+               (< c 0)
+               (<= ok-cols c))
+           #f]
+          [else
+           (maybe-update last-s s select-style*)
+           (maybe-update last-f f select-text-color*)
+           (maybe-update last-b b select-background-color*)
 
-          (define tr (add1 r))
-          (define tc (add1 c))
-          (unless (and (= cur-r tr)
-                       (= cur-c tc))
-            (display (A:goto tr tc) op)
-            (set! cur-r tr)
-            (set! cur-c tc))
+           (define tr (add1 r))
+           (define tc (add1 c))
+           (unless (and (= cur-r tr)
+                        (= cur-c tc))
+             (display (A:goto tr tc) op)
+             (set! cur-r tr)
+             (set! cur-c tc))
 
-          (when ch
-            (display ch op)
-            (set! cur-c (add1 cur-c)))
+           (when ch
+             (display ch op)
+             (set! cur-c (add1 cur-c)))
 
-          #t])))
+           #t]))))
    (define (buffer-commit! buf)
      (define op (terminal-buffer-op buf))
      (display (A:show-cursor) op)
@@ -153,7 +155,7 @@
      (buffer-resize! buf draw-rows draw-cols)
      (define cs (output-buffer-cells buf))
      (clear-cells! cs)
-     (draw-cell! cs))
+     (values draw-rows draw-cols (draw-cell! cs)))
    (define (buffer-commit! buf)
      (define op (output-buffer-op buf))
      (define cells (cells-vec (output-buffer-cells buf)))
@@ -197,9 +199,11 @@
   [buffer-start!
    (-> buffer?
        exact-nonnegative-integer? exact-nonnegative-integer?
-       (-> style/c color/c color/c
-           exact-nonnegative-integer? exact-nonnegative-integer? (or/c char? #f)
-           boolean?))]
+       (values exact-nonnegative-integer?
+               exact-nonnegative-integer?
+               (-> style/c color/c color/c
+                   exact-nonnegative-integer? exact-nonnegative-integer? (or/c char? #f)
+                   boolean?)))]
   [buffer-commit!
    (-> buffer? void?)]
   [make-terminal-buffer
