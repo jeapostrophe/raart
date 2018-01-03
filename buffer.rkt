@@ -2,10 +2,8 @@
 (require racket/generic
          racket/match
          racket/contract/base
-         (prefix-in A: ansi))
-
-;; XXX these programs really need remix syntax or something like
-;; define-generics-object
+         (prefix-in A: ansi)
+         "struct-define.rkt")
 
 (define-generics buffer
   (buffer-resize! buffer rows cols)
@@ -148,10 +146,8 @@
 (struct output-buffer (op [cells #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
-     (set-output-buffer-cells!
-      buf
-      (maybe-make-cells (output-buffer-cells buf)
-                        new-rows new-cols)))
+     (struct-define output-buffer buf)
+     (set! cells (maybe-make-cells cells new-rows new-cols)))
    (define (buffer-start! buf draw-rows draw-cols)
      (buffer-resize! buf draw-rows draw-cols)
      (define cs (output-buffer-cells buf))
