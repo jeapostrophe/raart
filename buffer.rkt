@@ -42,11 +42,14 @@
 (struct terminal-buffer (clear? op [term-rows #:mutable] [term-cols #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
-     ;; XXX use for internal cropping
      (set-terminal-buffer-term-rows! buf new-rows)
      (set-terminal-buffer-term-cols! buf new-cols))
    (define (buffer-start! buf draw-rows draw-cols)
      (define op (terminal-buffer-op buf))
+     (define ok-rows
+       (min draw-rows (terminal-buffer-term-rows buf)))
+     (define ok-cols
+       (min draw-cols (terminal-buffer-term-cols buf)))
      (define-syntax-rule
        (maybe-update last-X X select-X)
        (unless (eq? last-X X)
@@ -63,20 +66,30 @@
      (define cur-r 1)
      (define cur-c 1)
      (λ (s f b r c ch)
-       (maybe-update last-s s select-style*)
-       (maybe-update last-f f select-text-color*)
-       (maybe-update last-b b select-background-color*)
+       (cond
+         [(or (< r 0)
+              (<= ok-rows r)
+              (< c 0)
+              (<= ok-cols c))
+          #f]
+         [else
+          (maybe-update last-s s select-style*)
+          (maybe-update last-f f select-text-color*)
+          (maybe-update last-b b select-background-color*)
 
-       (define tr (add1 r))
-       (define tc (add1 c))
-       (unless (and (= cur-r tr)
-                    (= cur-c tc))
-         (display (A:goto tr tc) op)
-         (set! cur-r tr)
-         (set! cur-c tc))
-       (when ch
-         (display ch op)
-         (set! cur-c (add1 cur-c)))))
+          (define tr (add1 r))
+          (define tc (add1 c))
+          (unless (and (= cur-r tr)
+                       (= cur-c tc))
+            (display (A:goto tr tc) op)
+            (set! cur-r tr)
+            (set! cur-c tc))
+
+          (when ch
+            (display ch op)
+            (set! cur-c (add1 cur-c)))
+
+          #t])))
    (define (buffer-commit! buf)
      (define op (terminal-buffer-op buf))
      (display (A:show-cursor) op)
@@ -110,13 +123,21 @@
          [cell (in-vector row)])
     (clear-cell! cell)))
 (define (draw-cell! cs)
-  (match-define (cells _ _ vec) cs)
+  (match-define (cells ok-rows ok-cols vec) cs)
   (λ (s f b r c ch)
-    (define oc (vector-ref (vector-ref vec r) c))
-    (set-output-cell-s! oc s)
-    (set-output-cell-f! oc f)
-    (set-output-cell-b! oc b)
-    (set-output-cell-ch! oc ch)))
+    (cond
+      [(or (< r 0)
+           (<= ok-rows r)
+           (< c 0)
+           (<= ok-cols c))
+       #f]
+      [else
+       (define oc (vector-ref (vector-ref vec r) c))
+       (set-output-cell-s! oc s)
+       (set-output-cell-f! oc f)
+       (set-output-cell-b! oc b)
+       (set-output-cell-ch! oc ch)
+       #t])))
 
 (define (make-output-buffer #:output [op (current-output-port)])
   (output-buffer op (make-cells 0 0)))
@@ -174,7 +195,7 @@
        exact-nonnegative-integer? exact-nonnegative-integer?
        (-> style/c color/c color/c
            exact-nonnegative-integer? exact-nonnegative-integer? (or/c char? #f)
-           void?))]
+           boolean?))]
   [buffer-commit!
    (-> buffer? void?)]
   [make-terminal-buffer

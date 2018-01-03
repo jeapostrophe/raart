@@ -22,8 +22,7 @@
   (define draw-char! (buffer-start! buf h w))
   (! (λ (r c ch)
        (draw-char! (current-style) (current-fg) (current-bg)
-                   r c ch)
-       #t)
+                   r c ch))
      0 0)
   (buffer-commit! buf))
 

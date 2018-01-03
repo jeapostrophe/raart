@@ -129,11 +129,7 @@
                    [e e])))
    (define (chaos-output! c o)
      (when o
-       (draw (*term-buf c)
-             ;; XXX put this crop inside buffer?
-             (crop 0 (add1 (*term-cols c))
-                   0 (add1 (*term-rows c))
-                   o))))
+       (draw (*term-buf c) o)))
    (define (chaos-label! c l)
      (display/term (*term-t c) (xterm-set-window-title l)))
    (define (chaos-stop! c)
