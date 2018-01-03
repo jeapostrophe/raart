@@ -11,6 +11,12 @@
 (define current-style (make-parameter 'normal))
 (define current-fg (make-parameter #f))
 (define current-bg (make-parameter #f))
+(define-syntax (with-maybe-parameterize stx)
+  (syntax-parse stx
+    [(_ () . body) #'(let () . body)]
+    [(_ ([p:id v:id] . m) . body)
+     #'(let ([t (λ () (with-maybe-parameterize m . body))])
+         (if v (parameterize ([p v]) (t)) (t)))]))
 
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
@@ -26,16 +32,7 @@
      0 0)
   (buffer-commit! buf))
 
-(define-syntax (with-maybe-parameterize stx)
-  (syntax-parse stx
-    [(_ () . body) #'(let () . body)]
-    [(_ ([p:id v:id] . m) . body)
-     #'(let ([t (λ () (with-maybe-parameterize m . body))])
-         (if v (parameterize ([p v]) (t)) (t)))]))
-
-(define (style s x) (with-drawing  s #f #f x))
-(define (fg    f x) (with-drawing #f  f #f x))
-(define (bg    b x) (with-drawing #f #f  b x))
+;; Core forms
 (define (with-drawing s f b x)
   (match-define (raart w h !) x)
   (raart w h (λ (d r c)
@@ -45,7 +42,7 @@
                  (! d r c)))))
 
 (define (blank [w 0] [h 1])
-  (raart w h void))
+  (raart w h (λ (d r c) #f)))
 
 (define (char ch)
   (when (char-iso-control? ch)
@@ -62,6 +59,66 @@
            (strict-or
             (b! d r c)
             (f! d (+ r dr) (+ c dc))))))
+
+(define (mask mc mw mr mh x)
+  (match-define (raart xw xh x!) x)
+  (raart xw xh
+         (λ (d r c)
+           (x!
+            (λ (r c ch)
+              (and (<= mr r) (< r (+ mr mh))
+                   (<= mc c) (< c (+ mc mw))
+                   (d r c ch)))
+            r c))))
+
+(define (crop cc cw cr ch x)
+  (match-define (raart mw mh m!) (mask cc cw cr ch x))
+  (raart cw ch
+         (λ (d r c)
+           (m! (λ (r c ch)
+                 (d (- r cr) (- c cc) ch))
+               r c))))
+
+(define (if-drawn f x)
+  (match-define (raart w h !) x)
+  (raart w h (λ (d r c)
+               (define ? (! d r c))
+               (when ? (f))
+               ?)))
+
+(define (place-cursor-after x cr cc)
+  (match-define (raart w h !) x)
+  (raart w h (λ (d r c)
+               (strict-or (! d r c)
+                          (d cr cc #f)))))
+
+(define (*vappend2 y x)
+  (match-define (raart xw xh x!) x)
+  (match-define (raart yw yh y!) y)
+  (unless (= xw yw)
+    (error '*vappend2 "Widths must be equal: ~e vs ~e" xw yw))
+  (raart xw (+ xh yh)
+         (λ (d r c)
+           (strict-or
+            (x! d (+ r  0) c)
+            (y! d (+ r xh) c)))))
+
+(define (*happend2 y x)
+  (match-define (raart xw xh x!) x)
+  (match-define (raart yw yh y!) y)
+  (unless (= xh yh)
+    (error '*happend2 "Heights must be equal: ~e vs ~e" xh yh))
+  (raart (+ xw yw) xh
+         (λ (d r c)
+           (strict-or
+            (x! d r (+ c  0))
+            (y! d r (+ c xw))))))
+
+;; Library
+(define (style s x) (with-drawing  s #f #f x))
+(define (fg    f x) (with-drawing #f  f #f x))
+(define (bg    b x) (with-drawing #f #f  b x))
+
 (define-syntax (place-at* stx)
   (syntax-parse stx
     [(_ b:expr) #'b]
@@ -105,35 +162,6 @@
          #:halign 'center #:valign 'center
          x))
 
-(define (mask mc mw mr mh x)
-  (match-define (raart xw xh x!) x)
-  (raart xw xh
-         (λ (d r c)
-           (x!
-            (λ (r c ch)
-              (and (<= mr r) (< r (+ mr mh))
-                   (<= mc c) (< c (+ mc mw))
-                   (d r c ch)))
-            r c))))
-
-(define (crop cc cw cr ch x)
-  (match-define (raart mw mh m!) (mask cc cw cr ch x))
-  (raart cw ch
-         (λ (d r c)
-           (m! (λ (r c ch)
-                 (d (- r cr) (- c cc) ch))
-               r c))))
-
-(define (*vappend2 y x)
-  (match-define (raart xw xh x!) x)
-  (match-define (raart yw yh y!) y)
-  (unless (= xw yw)
-    (error '*vappend2 "Widths must be equal: ~e vs ~e" xw yw))
-  (raart xw (+ xh yh)
-         (λ (d r c)
-           (strict-or
-            (x! d (+ r  0) c)
-            (y! d (+ r xh) c)))))
 (define (vappend2 y x #:halign [halign #f])
   (cond
     [(not halign) (*vappend2 y x)]
@@ -149,16 +177,6 @@
 (define (vappend* #:halign [halign #f] rs)
   (apply vappend rs #:halign halign))
 
-(define (*happend2 y x)
-  (match-define (raart xw xh x!) x)
-  (match-define (raart yw yh y!) y)
-  (unless (= xh yh)
-    (error '*happend2 "Heights must be equal: ~e vs ~e" xh yh))
-  (raart (+ xw yw) xh
-         (λ (d r c)
-           (strict-or
-            (x! d r (+ c  0))
-            (y! d r (+ c xw))))))
 (define (happend2 y x #:valign [valign #f])
   (cond
     [(not valign) (*happend2 y x)]
@@ -269,19 +287,6 @@
   (for/list ([row (in-list rows)])
     (for/list ([col (in-list row)])
       (if (raart? col) col (text (~a col))))))
-
-(define (if-drawn f x)
-  (match-define (raart w h !) x)
-  (raart w h (λ (d r c)
-               (define ? (! d r c))
-               (when ? (f))
-               ?)))
-
-(define (place-cursor-after x cr cc)
-  (match-define (raart w h !) x)
-  (raart w h (λ (d r c)
-               (strict-or (! d r c)
-                          (d cr cc #f)))))
 
 (define valign/c (or/c 'top 'center 'bottom))
 (define halign/c (or/c 'left 'center 'right))
