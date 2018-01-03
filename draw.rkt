@@ -348,6 +348,6 @@
                  (listof (listof raart?)))]
   [if-drawn (-> (-> any) raart? raart?)]
   [place-cursor-after
-   (-> raart? exact-positive-integer? exact-positive-integer?
+   (-> raart? exact-nonnegative-integer? exact-nonnegative-integer?
        raart?)])
  place-at*)

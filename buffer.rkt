@@ -39,24 +39,44 @@
                               #:clear? [clear? #t]
                               #:output [op (current-output-port)])
   (terminal-buffer clear? op term-rows term-cols))
-(struct terminal-buffer (clear? op term-rows term-cols)
-  #:mutable
+(struct terminal-buffer (clear? op [term-rows #:mutable] [term-cols #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
+     ;; XXX use for internal cropping
      (set-terminal-buffer-term-rows! buf new-rows)
      (set-terminal-buffer-term-cols! buf new-cols))
    (define (buffer-start! buf draw-rows draw-cols)
      (define op (terminal-buffer-op buf))
+     (define-syntax-rule
+       (maybe-update last-X X select-X)
+       (unless (eq? last-X X)
+         (display (select-X X) op)
+         (set! last-X X)))
+
      (display (A:dec-soft-terminal-reset) op)
      (when (terminal-buffer-clear? buf)
        (display (A:clear-screen/home) op))
      (display (A:hide-cursor) op)
+     (define last-s 'normal)
+     (define last-f #f)
+     (define last-b #f)
+     (define cur-r 1)
+     (define cur-c 1)
      (λ (s f b r c ch)
-       (display (select-style* s) op)
-       (display (select-text-color* f) op)
-       (display (select-background-color* b) op)
-       (display (A:goto (add1 r) (add1 c)) op)
-       (when ch (display ch op))))
+       (maybe-update last-s s select-style*)
+       (maybe-update last-f f select-text-color*)
+       (maybe-update last-b b select-background-color*)
+
+       (define tr (add1 r))
+       (define tc (add1 c))
+       (unless (and (= cur-r tr)
+                    (= cur-c tc))
+         (display (A:goto tr tc) op)
+         (set! cur-r tr)
+         (set! cur-c tc))
+       (when ch
+         (display ch op)
+         (set! cur-c (add1 cur-c)))))
    (define (buffer-commit! buf)
      (define op (terminal-buffer-op buf))
      (display (A:show-cursor) op)
@@ -69,39 +89,52 @@
   (set-output-cell-b! c #f)
   (set-output-cell-ch! c #f))
 (define (default-cell) (output-cell 'normal #f #f #f))
+
+(struct cells (rows cols vec) #:mutable)
+(define (maybe-make-cells old new-rows new-cols)
+  (match-define (cells old-rows old-cols vec) old)
+  ;; XXX support shrinking/growing
+  (if (and (= old-rows new-rows)
+           (= old-cols new-cols))
+    old
+    (make-cells new-rows new-cols)))
 (define (make-cells rows cols)
-  (build-vector
-   rows
-   (λ (r)
-     (build-vector cols (λ (c) (default-cell))))))
+  (cells rows cols
+         (build-vector
+          rows
+          (λ (r)
+            (build-vector cols (λ (c) (default-cell)))))))
+(define (clear-cells! cs)
+  (match-define (cells _ _ vec) cs)
+  (for* ([row (in-vector vec)]
+         [cell (in-vector row)])
+    (clear-cell! cell)))
+(define (draw-cell! cs)
+  (match-define (cells _ _ vec) cs)
+  (λ (s f b r c ch)
+    (define oc (vector-ref (vector-ref vec r) c))
+    (set-output-cell-s! oc s)
+    (set-output-cell-f! oc f)
+    (set-output-cell-b! oc b)
+    (set-output-cell-ch! oc ch)))
 
 (define (make-output-buffer #:output [op (current-output-port)])
-  (output-buffer op 0 0 (make-cells 0 0)))
-(struct output-buffer (op rows cols cells)
-  #:mutable
+  (output-buffer op (make-cells 0 0)))
+(struct output-buffer (op [cells #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
-     (match-define (output-buffer _ old-rows old-cols _) buf)
-     (when (or (not (<= new-rows old-rows))
-               (not (<= new-cols old-cols)))
-       (set-output-buffer-rows! buf new-rows)
-       (set-output-buffer-cols! buf new-cols)
-       (set-output-buffer-cells! buf (make-cells new-rows new-cols))))
+     (set-output-buffer-cells!
+      buf
+      (maybe-make-cells (output-buffer-cells buf)
+                        new-rows new-cols)))
    (define (buffer-start! buf draw-rows draw-cols)
      (buffer-resize! buf draw-rows draw-cols)
-     (define cells (output-buffer-cells buf))
-     (for* ([row (in-vector cells)]
-            [cell (in-vector row)])
-       (clear-cell! cell))
-     (λ (s f b r c ch)
-       (define cell (vector-ref (vector-ref cells r) c))
-       (set-output-cell-s! cell s)
-       (set-output-cell-f! cell f)
-       (set-output-cell-b! cell b)
-       (set-output-cell-ch! cell ch)))
+     (define cs (output-buffer-cells buf))
+     (clear-cells! cs)
+     (draw-cell! cs))
    (define (buffer-commit! buf)
      (define op (output-buffer-op buf))
-     (define cells (output-buffer-cells buf))
+     (define cells (cells-vec (output-buffer-cells buf)))
      (for/fold ([last-s 'normal] [last-f #f] [last-b #f])
                ([row (in-vector cells)])
        (begin0
