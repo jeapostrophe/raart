@@ -57,6 +57,7 @@
          (set! last-X X)))
 
      (display (A:dec-soft-terminal-reset) op)
+     ;; XXX need to force this sometimes... maybe on resize?
      (when (terminal-buffer-clear? buf)
        (display (A:clear-screen/home) op))
      (display (A:hide-cursor) op)
@@ -176,7 +177,10 @@
 
 (define (make-buffered-terminal-buffer term-rows term-cols
                                        #:output [op (current-output-port)])
-  ;; XXX
+  ;; XXX mix output and terminal, but with two sets of cells (old & new)
+  ;; - On resize, change the cells and underlying terminal
+  ;; - On start, check if draw size is okay, then draw to the cells
+  ;; - On commit, do a diff of the cells and update appropriate cells
   (make-terminal-buffer term-rows term-cols
                         #:clear? #t
                         #:output op))
