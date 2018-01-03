@@ -73,6 +73,7 @@
   (string-append (reset-mode x11-extended-mouse-tracking-mode)
                  (reset-mode x11-any-event-mouse-tracking-mode)
                  (reset-mode x11-focus-event-mode)))
+;; XXX maybe this should all be in chaos-start
 (define (make-raart #:mouse? [mouse? #f])
   (define alternate? #t)
 
@@ -80,8 +81,8 @@
   (define init-rows 24)
   (define init-cols 80)
   (define buf
-    (make-buffered-terminal-buffer init-rows init-cols
-                                   #:output (term-out t)))
+    (make-cached-buffer init-rows init-cols
+                        #:output (term-out t)))
   (define ch (make-async-channel))
   ;; Initialize term
   (when alternate?
@@ -132,6 +133,8 @@
        (draw (*term-buf c) o)))
    (define (chaos-label! c l)
      (display/term (*term-t c) (xterm-set-window-title l)))
+   (define (chaos-start! c)
+     (void))
    (define (chaos-stop! c)
      (define t (*term-t c))
      (when (*term-mouse? c)
