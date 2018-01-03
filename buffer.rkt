@@ -55,7 +55,6 @@
        (display (select-style* s) op)
        (display (select-text-color* f) op)
        (display (select-background-color* b) op)
-       ;; XXX maybe add1 to r & c
        (display (A:goto (add1 r) (add1 c)) op)
        (when ch (display ch op))))
    (define (buffer-commit! buf)
