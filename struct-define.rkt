@@ -3,6 +3,20 @@
                      racket/struct-info
                      syntax/parse))
 
+(begin-for-syntax
+  (define (make-field-name-transformer instace-id-stx field-ref-stx field-set!-stx)
+    (make-set!-transformer
+     (lambda (stx)
+       (syntax-case stx (set!)
+         [(set! id v)
+          (if (syntax->datum field-set!-stx)
+            (quasisyntax/loc stx
+              (#,field-set!-stx #,instace-id-stx  v))
+            (raise-syntax-error 'set! "field not mutable" stx #'id))]
+         [id (identifier? #'id)
+             (quasisyntax/loc stx
+               (#,field-ref-stx #,instace-id-stx))])))))
+
 (define-syntax (struct-define stx)
   (syntax-parse stx
     [(_ the-struct the-instance:expr)
@@ -23,21 +37,12 @@
        (list field-name field-ref field-set))
      #:with (field-val-id ...)
      (generate-temporaries #'(field-name ...))
-     
+
      (syntax/loc stx
        (begin (define the-instance-id the-instance)
               (define-syntax field-name
-                (make-set!-transformer
-                 (lambda (stx)
-                   (syntax-case stx (set!)
-                     [(set! id v)
-                      (if (syntax->datum #'field-set!)
-                        (quasisyntax/loc stx
-                          (field-set! the-instance-id v))
-                        (raise-syntax-error 'set! "field not mutable" stx #'id))]
-                     [id (identifier? #'id)
-                         (syntax/loc stx
-                           (field-ref the-instance-id))]))))
+                (make-field-name-transformer #'the-instance-id
+                                             #'field-ref #'field-set!))
               ...))]))
 
 (define-syntax-rule (define-struct-define the-struct the-struct-define)
