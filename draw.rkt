@@ -4,89 +4,28 @@
          racket/contract/base
          (for-syntax racket/base
                      syntax/parse)
-         (prefix-in A: ansi))
+         "buffer.rkt")
 
 (define (strict-or a b) (or a b))
 
 (define current-style (make-parameter 'normal))
-(define symbol->style
-  `#hasheq([normal . ,A:style-normal]
-           [bold . ,A:style-bold]
-           [inverse . ,A:style-inverse]
-           [underline . ,A:style-underline]))
-(define current-fg (make-parameter 'default))
-(define current-bg (make-parameter 'default))
-(define current-display-drawing-parameters?
-  (make-parameter (current-output-port)))
-(define symbol->color
-  `#hasheq(
-           [black   .  0] [red       .  1] [green   .  2] [yellow   . 3]
-           [blue    .  4] [magenta   .  5] [cyan    .  6] [white    . 7]
-           [brblack .  8] [brred     .  9] [brgreen . 10] [bryellow . 11]
-           [brblue  . 12] [brmagenta . 13] [brcyan  . 14] [brwhite  . 15]))
-(define (select-text-color* c)
-  (if (eq? c 'default)
-    (A:select-graphic-rendition A:style-default-text-color)
-    (A:select-xterm-256-text-color (hash-ref symbol->color c))))
-(define (select-background-color* c)
-  (if (eq? c 'default)
-    (A:select-graphic-rendition A:style-default-background-color)
-    (A:select-xterm-256-background-color (hash-ref symbol->color c))))
-(define (set-drawing-parameters!)
-  (cond
-    [(current-display-drawing-parameters?)
-     => (λ (op) (display (get-drawing-parameters) op))]))
-(define (get-drawing-parameters)
-  (string-append
-   (A:select-graphic-rendition (hash-ref symbol->style (current-style)))
-   (select-text-color* (current-fg))
-   (select-background-color* (current-bg))))
+(define current-fg (make-parameter #f))
+(define current-bg (make-parameter #f))
 
 ;; w : exact-nonnegative-integer?
 ;; h : exact-nonnegative-integer?
 ;; ! : (row col char -> void) row col -> bool
 (struct raart (w h !))
 
-(define (draw x
-              #:output [op (current-output-port)]
-              #:clear? [clear? #t])
+(define (draw buf x)
   (match-define (raart w h !) x)
-  (display (A:dec-soft-terminal-reset) op)
-  (when clear?
-    (display (A:clear-screen/home) op))
-  (display (A:hide-cursor))
-  (parameterize ([current-display-drawing-parameters? op])
-    (set-drawing-parameters!)
-    (! (λ (r c ch)
-         (display (A:goto r c) op)
-         (when ch (display ch op))
-         #t)
-       1 1))
-  (display (A:show-cursor))
-  (flush-output op))
-
-(define (draw-here x #:output [op (current-output-port)])
-  (match-define (raart w h !) x)
-  (define init-dp (get-drawing-parameters))
-  (define def (cons init-dp #\space))
-  (define rows (build-vector h (λ (i) (make-vector w def))))
-  (parameterize ([current-display-drawing-parameters? #f])
-    (! (λ (r c ch)
-         (vector-set! (vector-ref rows r) c
-                      (cons (get-drawing-parameters) ch))
-         #t)
-       0 0))
-  (for/fold ([last-dp init-dp]) ([r (in-vector rows)])
-    (begin0
-        (for/fold ([last-dp last-dp]) ([dp*ch (in-vector r)])
-          (match-define (cons this-dp ch) dp*ch)
-          (unless (string=? this-dp last-dp)
-            (display this-dp op))
-          (display ch op)
-          this-dp)
-      (newline op)))
-  (flush-output op)
-  (void))
+  (define draw-char! (buffer-start! buf h w))
+  (! (λ (r c ch)
+       (draw-char! (current-style) (current-fg) (current-bg)
+                   r c ch)
+       #t)
+     0 0)
+  (buffer-commit! buf))
 
 (define-syntax (with-maybe-parameterize stx)
   (syntax-parse stx
@@ -101,13 +40,10 @@
 (define (with-drawing s f b x)
   (match-define (raart w h !) x)
   (raart w h (λ (d r c)
-               (begin0
-                   (with-maybe-parameterize ([current-style s]
-                                             [current-fg f]
-                                             [current-bg b])
-                     (set-drawing-parameters!)
-                     (! d r c))
-                 (set-drawing-parameters!)))))
+               (with-maybe-parameterize ([current-style s]
+                                         [current-fg f]
+                                         [current-bg b])
+                 (! d r c)))))
 
 (define (blank [w 0] [h 1])
   (raart w h void))
@@ -348,24 +284,15 @@
                (strict-or (! d r c)
                           (d cr cc #f)))))
 
-(define style/c (apply or/c (hash-keys symbol->style)))
-(define color/c (apply or/c (hash-keys symbol->color)))
 (define valign/c (or/c 'top 'center 'bottom))
 (define halign/c (or/c 'left 'center 'right))
 (provide
  (contract-out
   [raart? (-> any/c boolean?)]
   [draw
-   (->* (raart?)
-        (#:output output-port?
-         #:clear? boolean?)
-        void?)]
-  [draw-here
-   (->* (raart?) (#:output output-port?)
-        void?)]
-  [style/c contract?]
+   (-> buffer? raart?
+       void?)]
   [style (-> style/c raart? raart?)]
-  [color/c contract?]
   [fg (-> color/c raart? raart?)]
   [bg (-> color/c raart? raart?)]
   [with-drawing

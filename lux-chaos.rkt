@@ -9,7 +9,8 @@
          ansi/private/tty-raw-extension
          unix-signals
          lux/chaos
-         raart/draw)
+         raart/draw
+         raart/buffer)
 (provide (all-from-out (submod ansi/lcd-terminal event-structs)))
 
 (struct term (f in out))
@@ -74,8 +75,13 @@
                  (reset-mode x11-focus-event-mode)))
 (define (make-raart #:mouse? [mouse? #f])
   (define alternate? #t)
-  
+
   (define t (open-term))
+  (define init-rows 24)
+  (define init-cols 80)
+  (define buf
+    (make-buffered-terminal-buffer init-rows init-cols
+                                   #:output (term-out t)))
   (define ch (make-async-channel))
   ;; Initialize term
   (when alternate?
@@ -107,25 +113,27 @@
            (async-channel-put ch v)
            (loop))))))
   ;; Return
-  (*term alternate? mouse? t ch sig-th input-th 24 80))
+  (*term alternate? mouse? t buf ch sig-th input-th init-rows init-cols))
 
 (struct *term
-  (alternate? mouse? t ch sig-th input-th [rows #:mutable] [cols #:mutable])
+  (alternate? mouse? t buf ch sig-th input-th [rows #:mutable] [cols #:mutable])
   #:methods gen:chaos
   [(define (chaos-event c)
      (handle-evt (*term-ch c)
                  (match-lambda
                    [(and e (screen-size-report rows cols))
+                    (buffer-resize! (*term-buf c) rows cols)
                     (set-*term-rows! c rows)
                     (set-*term-cols! c cols)
                     e]
                    [e e])))
    (define (chaos-output! c o)
      (when o
-       (draw (crop 0 (add1 (*term-cols c))
+       (draw (*term-buf c)
+             ;; XXX put this crop inside buffer?
+             (crop 0 (add1 (*term-cols c))
                    0 (add1 (*term-rows c))
-                   o)
-             #:output (term-out (*term-t c)))))
+                   o))))
    (define (chaos-label! c l)
      (display/term (*term-t c) (xterm-set-window-title l)))
    (define (chaos-stop! c)
