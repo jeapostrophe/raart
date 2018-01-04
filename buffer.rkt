@@ -3,7 +3,7 @@
          racket/match
          racket/contract/base
          (prefix-in A: ansi)
-         "struct-define.rkt")
+         struct-define)
 
 (define-generics buffer
   (buffer-resize! buffer rows cols)

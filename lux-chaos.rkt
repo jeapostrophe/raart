@@ -10,7 +10,7 @@
          lux/chaos
          raart/draw
          raart/buffer
-         "struct-define.rkt")
+         struct-define)
 (provide (all-from-out (submod ansi/lcd-terminal event-structs)))
 
 (struct term (f in out))
