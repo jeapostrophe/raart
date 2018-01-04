@@ -23,24 +23,18 @@
         ((macosx) "-f")
         (else     "-F")))
     (define (open-term #:tty [tty default-tty])
-      (system* "/bin/stty"
-               stty-minus-f-arg-string
-               tty
-               "raw"
-               "pass8"
-               "-echo")
+      (system* "/bin/stty" stty-minus-f-arg-string tty
+               "raw" "pass8" "-echo")
       (define-values (in out)
         (open-input-output-file tty #:exists 'update))
       (file-stream-buffer-mode in 'none)
       (file-stream-buffer-mode out 'none)
       (term tty in out))
     (define (close-term t)
-      (match-define (term f in out) t)
+      (match-define (term tty in out) t)
       (close-input-port in)
       (close-output-port out)
-      (system* "/bin/stty"
-               stty-minus-f-arg-string
-               f
+      (system* "/bin/stty" stty-minus-f-arg-string tty
                "sane"))))
 
 (define-syntax-rule (define-stdin-term open-term close-term)
