@@ -9,7 +9,8 @@
          unix-signals
          lux/chaos
          raart/draw
-         raart/buffer)
+         raart/buffer
+         "struct-define.rkt")
 (provide (all-from-out (submod ansi/lcd-terminal event-structs)))
 
 (struct term (f in out))
@@ -56,14 +57,11 @@
 #;(define-stty-term open-term close-term)
 (define-stdin-term open-term close-term)
 
-(define (display/flush v op)
-  (display v op)
-  (flush-output op))
-
 (define (display/term t v)
   (define op (term-out t))
   (unless (port-closed? op)
-    (display/flush v op)))
+    (display v op)
+    (flush-output op)))
 
 ;; Lux
 (define x11-mouse-on
@@ -74,59 +72,25 @@
   (string-append (reset-mode x11-extended-mouse-tracking-mode)
                  (reset-mode x11-any-event-mouse-tracking-mode)
                  (reset-mode x11-focus-event-mode)))
-;; XXX maybe this should all be in chaos-start
+
 (define (make-raart #:mouse? [mouse? #f])
   (define alternate? #t)
-
-  (define t (open-term))
-  (define init-rows 24)
-  (define init-cols 80)
-  (define buf
-    (make-cached-buffer init-rows init-cols
-                        #:output (term-out t)))
   (define ch (make-async-channel))
-  ;; Initialize term
-  (when alternate?
-    (display/term t (set-mode alternate-screen-mode)))
-  (when mouse?
-    (display/term t x11-mouse-on)
-    (plumber-add-flush! (current-plumber)
-                        (lambda (handle)
-                          (display/term t x11-mouse-off))))
-  ;; Register for window change events
-  ;; XXX some way to force this to be first
-  (display/term t (device-request-screen-size))
-  (capture-signal! 'SIGWINCH)
-  (define sig-th
-    (thread
-     (λ ()
-       (let loop ()
-         (define s (read-signal))
-         (match (lookup-signal-name s)
-           ['SIGWINCH (display/term t (device-request-screen-size))
-                      (loop)])))))
-  ;; Listen for input
-  (define input-th
-    (thread
-     (λ ()
-       (let loop ()
-         (define v (lex-lcd-input (term-in t) #:utf-8? #t))
-         (unless (eof-object? v)
-           (async-channel-put ch v)
-           (loop))))))
-  ;; Return
-  (*term alternate? mouse? t buf ch sig-th input-th init-rows init-cols))
+  (*term alternate? mouse? #f #f ch #f #f #f #f))
 
+(define-struct-define *term term-define)
 (struct *term
-  (alternate? mouse? t buf ch sig-th input-th [rows #:mutable] [cols #:mutable])
+  (alternate? mouse? t buf ch sig-th input-th rows cols)
+  #:mutable
   #:methods gen:chaos
   [(define (chaos-event c)
-     (handle-evt (*term-ch c)
+     (term-define c)
+     (handle-evt ch
                  (match-lambda
-                   [(and e (screen-size-report rows cols))
-                    (buffer-resize! (*term-buf c) rows cols)
-                    (set-*term-rows! c rows)
-                    (set-*term-cols! c cols)
+                   [(and e (screen-size-report new-rows new-cols))
+                    (set! rows new-rows)
+                    (set! cols new-cols)
+                    (buffer-resize! buf rows cols)
                     e]
                    [e e])))
    (define (chaos-output! c o)
@@ -135,15 +99,53 @@
    (define (chaos-label! c l)
      (display/term (*term-t c) (xterm-set-window-title l)))
    (define (chaos-start! c)
+     (term-define c)
+     (set! t (open-term))
+     (set! rows 24)
+     (set! cols 80)
+     (set! buf (make-cached-buffer rows cols #:output (term-out t)))
+
+     ;; Initialize term
+     (when alternate?
+       (display/term t (set-mode alternate-screen-mode)))
+     (when mouse?
+       (display/term t x11-mouse-on)
+       (plumber-add-flush! (current-plumber)
+                           (lambda (handle)
+                             (display/term t x11-mouse-off))))
+
+     ;; Register for window change events
+     ;; XXX some way to force this to be first
+     (display/term t (device-request-screen-size))
+     (capture-signal! 'SIGWINCH)
+     (set! sig-th
+           (thread
+            (λ ()
+              (let loop ()
+                (define s (read-signal))
+                (match (lookup-signal-name s)
+                  ['SIGWINCH (display/term t (device-request-screen-size))
+                             (loop)])))))
+
+     ;; Listen for input
+     (set! input-th
+           (thread
+            (λ ()
+              (let loop ()
+                (define v (lex-lcd-input (term-in t) #:utf-8? #t))
+                (unless (eof-object? v)
+                  (async-channel-put ch v)
+                  (loop))))))
+
      (void))
    (define (chaos-stop! c)
-     (define t (*term-t c))
-     (when (*term-mouse? c)
+     (term-define c)
+     (when mouse?
        (display/term t x11-mouse-off))
-     (when (*term-alternate? c)
+     (when alternate?
        (display/term t (reset-mode alternate-screen-mode)))
-     (kill-thread (*term-sig-th c))
-     (kill-thread (*term-input-th c))
+     (kill-thread sig-th)
+     (kill-thread input-th)
      (release-signal! 'SIGWINCH)
      (close-term t))])
 
