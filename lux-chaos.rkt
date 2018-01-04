@@ -114,19 +114,6 @@
                            (lambda (handle)
                              (display/term t x11-mouse-off))))
 
-     ;; Register for window change events
-     ;; XXX some way to force this to be first
-     (display/term t (device-request-screen-size))
-     (capture-signal! 'SIGWINCH)
-     (set! sig-th
-           (thread
-            (λ ()
-              (let loop ()
-                (define s (read-signal))
-                (match (lookup-signal-name s)
-                  ['SIGWINCH (display/term t (device-request-screen-size))
-                             (loop)])))))
-
      ;; Listen for input
      (set! input-th
            (thread
@@ -137,16 +124,33 @@
                   (async-channel-put ch v)
                   (loop))))))
 
+     ;; Register for window change events
+     ;; XXX some way to force this to be first
+     (display/term t (device-request-screen-size))
+     (set! sig-th
+           (thread
+            (λ ()
+              (let loop ()
+                (define s (read-signal))
+                (match (lookup-signal-name s)
+                  ['SIGWINCH (display/term t (device-request-screen-size))
+                             (loop)])))))
+     (capture-signal! 'SIGWINCH)
+
      (void))
    (define (chaos-stop! c)
      (term-define c)
+
+     (release-signal! 'SIGWINCH)
+     (kill-thread sig-th)
+
+     (kill-thread input-th)
+
      (when mouse?
        (display/term t x11-mouse-off))
      (when alternate?
        (display/term t (reset-mode alternate-screen-mode)))
-     (kill-thread sig-th)
-     (kill-thread input-th)
-     (release-signal! 'SIGWINCH)
+
      (close-term t))])
 
 (provide
