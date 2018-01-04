@@ -6,7 +6,6 @@
          racket/system
          ansi
          (submod ansi/lcd-terminal event-structs)
-         ansi/private/tty-raw-extension
          unix-signals
          lux/chaos
          raart/draw
@@ -15,45 +14,47 @@
 
 (struct term (f in out))
 
-(define default-tty "/dev/tty")
+(define-syntax-rule (define-stty-term open-term close-term)
+  (begin
+    (define default-tty "/dev/tty")
+    (define stty-minus-f-arg-string
+      (case (system-type 'os)
+        ((macosx) "-f")
+        (else     "-F")))
+    (define (open-term #:tty [tty default-tty])
+      (system* "/bin/stty"
+               stty-minus-f-arg-string
+               tty
+               "raw"
+               "pass8"
+               "-echo")
+      (define-values (in out)
+        (open-input-output-file tty #:exists 'update))
+      (file-stream-buffer-mode in 'none)
+      (file-stream-buffer-mode out 'none)
+      (term tty in out))
+    (define (close-term t)
+      (match-define (term f in out) t)
+      (close-input-port in)
+      (close-output-port out)
+      (system* "/bin/stty"
+               stty-minus-f-arg-string
+               f
+               "sane"))))
 
-#;
-(define stty-minus-f-arg-string
-  (case (system-type 'os)
-    ((macosx) "-f")
-    (else     "-F")))
-#;
-(define (open-term #:tty [tty default-tty])
-  (system* "/bin/stty"
-           stty-minus-f-arg-string
-           tty
-           "raw"
-           "-echo")
-  (define-values (in out)
-    (open-input-output-file tty #:exists 'update))
-  (term tty in out))
-#;
-(define (close-term t)
-  (match-define (term f in out) t)
-  (close-input-port in)
-  (close-output-port out)
-  (system* "/bin/stty"
-           stty-minus-f-arg-string
-           f
-           "cooked"
-           "echo"))
+(define-syntax-rule (define-stdin-term open-term close-term)
+  (begin
+    (require ansi/private/tty-raw-extension)
+    (define (open-term #:tty [tty #f])
+      (when tty
+        (error 'open-term "Custom tty not supported in this version"))
+      (tty-raw!)
+      (term #f (current-input-port) (current-output-port)))
+    (define (close-term t)
+      (tty-restore!))))
 
-(define (open-term)
-  (tty-raw!)
-  (term #f (current-input-port) (current-output-port)))
-(define (close-term t)
-  (tty-restore!))
-
-(define (with-term f #:tty [tty default-tty])
-  (define t (open-term #:tty tty))
-  (define (close!) (close-term t))
-  (with-handlers ([exn:fail? (λ (x) (close!) (raise x))])
-    (begin0 (f t) (close!))))
+#;(define-stty-term open-term close-term)
+(define-stdin-term open-term close-term)
 
 (define (display/flush v op)
   (display v op)
