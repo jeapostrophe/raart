@@ -6,6 +6,8 @@
                      syntax/parse)
          "buffer.rkt")
 
+;; XXX ensure that argument order is ALWAYS w h r c
+
 (define (strict-or a b) (or a b))
 
 (define current-style (make-parameter 'normal))
@@ -247,10 +249,7 @@
                #:valign [row-valign 'top]
                #:halign [halign 'left])
   (define (list-ref* i l)
-    (cond
-      [(not (pair? l)) l]
-      [(zero? i) (first l)]
-      [else (list-ref* (sub1 i) (rest l))]))
+    (list-ref l (min i (sub1 (length l)))))
   (define (col-halign-sel i halign)
     (match halign
       [(? symbol?) halign]
