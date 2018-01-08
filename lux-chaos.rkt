@@ -72,7 +72,7 @@
   (define ch (make-async-channel))
   (*term alternate? mouse? #f #f ch #f #f #f #f))
 
-(define-struct-define *term term-define)
+(define-struct-define term-define *term)
 (struct *term
   (alternate? mouse? t buf ch sig-th input-th rows cols)
   #:mutable

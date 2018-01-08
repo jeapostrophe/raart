@@ -40,7 +40,7 @@
                               #:clear? [clear? #t]
                               #:output [op (current-output-port)])
   (terminal-buffer clear? op term-rows term-cols))
-(define-struct-define terminal-buffer terminal-buffer-define)
+(define-struct-define terminal-buffer-define terminal-buffer)
 (struct terminal-buffer (clear? op [term-rows #:mutable] [term-cols #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
@@ -143,7 +143,7 @@
 
 (define (make-output-buffer #:output [op (current-output-port)])
   (output-buffer op (make-cells 0 0)))
-(define-struct-define output-buffer output-buffer-define)
+(define-struct-define output-buffer-define output-buffer)
 (struct output-buffer (op [cells #:mutable])
   #:methods gen:buffer
   [(define (buffer-resize! buf new-rows new-cols)
@@ -187,7 +187,7 @@
    (make-cells term-rows term-cols)
    (make-cells term-rows term-cols)
    0 0))
-(define-struct-define cached-buffer cached-buffer-define)
+(define-struct-define cached-buffer-define cached-buffer)
 (struct cached-buffer
   ([clear-next? #:mutable]
    term-nclear term-yclear
