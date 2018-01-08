@@ -150,4 +150,4 @@
 (provide
  (contract-out
   [make-raart
-   (->* () () chaos?)]))
+   (->* () (#:mouse? boolean?) chaos?)]))
