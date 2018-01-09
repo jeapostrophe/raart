@@ -48,7 +48,7 @@
           #:halign 'left
           (for/list ([i (in-range 80)])
             (if-drawn
-             (λ () (set! seen? (cons i seen?)))
+             (λ (r c w h) (set! seen? (cons i seen?)))
              (text (~a "Row " i)))))))
   (newline)
   (printf "Drawn: ~v\n" (reverse seen?)))

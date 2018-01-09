@@ -73,6 +73,16 @@
     (error 'char "Illegal character: ~v" ch))
   (raart* 1 1 (λ (okay? d r c) (d r c ch))))
 
+(define (text s)
+  (for ([ch (in-string s)]
+        #:when (char-iso-control? ch))
+    (error 'text "Illegal character in string: ~v" ch))
+  (raart* (string-length s) 1
+          (λ (okay? d r c)
+            (for ([ch (in-string s)]
+                  [dc (in-naturals)])
+              (d r (+ c dc) ch)))))
+
 (define (place-at back dr dc front)
   (match-define (raart bw bh b!) back)
   (match-define (raart fw fh f!) front)
@@ -112,7 +122,7 @@
   (match-define (raart w h !) x)
   (raart* w h (λ (okay? d r c)
                 (define ? (! okay? d r c))
-                (when ? (f))
+                (when ? (f r c w h))
                 ?)))
 
 (define (place-cursor-after x cr cc)
@@ -221,12 +231,8 @@
 (define (happend* #:valign [valign #f] rs)
   (apply happend rs #:valign valign))
 
-(define (text s)
-  (if (string=? s "")
-    (blank)
-    (happend* (map char (string->list s)))))
 (define (hline w)
-  (happend* (make-list w (char #\─))))
+  (text (make-string w #\─)))
 (define (vline h)
   (vappend* (make-list h (char #\│))))
 
@@ -376,7 +382,10 @@
               raart?)]
   [text-rows (-> (listof (listof any/c))
                  (listof (listof raart?)))]
-  [if-drawn (-> (-> any) raart? raart?)]
+  [if-drawn (-> (-> exact-nonnegative-integer? exact-nonnegative-integer?
+                    exact-nonnegative-integer? exact-nonnegative-integer?
+                    any)
+                raart? raart?)]
   [place-cursor-after
    (-> raart? exact-nonnegative-integer? exact-nonnegative-integer?
        raart?)])
