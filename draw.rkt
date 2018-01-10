@@ -40,8 +40,9 @@
     (max-rows max-cols draw-char!)
     (buffer-start! buf h w))
   (define (draw-with-params r c ch)
-    (draw-char! (current-style) (current-fg) (current-bg)
-                r c ch))
+    (unless (or (negative? r) (negative? c))
+      (draw-char! (current-style) (current-fg) (current-bg)
+                  r c ch)))
   (define (on-screen? w h r c)
     (rectangle-intersect 0 0
                          max-cols max-rows

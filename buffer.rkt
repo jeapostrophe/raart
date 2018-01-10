@@ -202,6 +202,8 @@
    (define (buffer-resize! buf new-rows new-cols)
      (cached-buffer-define buf)
      (set! clear-next? #t)
+     (set! cur-cells (maybe-make-cells cur-cells new-rows new-cols))
+     (set! new-cells (maybe-make-cells new-cells new-rows new-cols))
      (super-buffer-resize! term-nclear new-rows new-cols)
      (super-buffer-resize! term-yclear new-rows new-cols)
      (set! term-rows new-rows)

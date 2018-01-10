@@ -2,16 +2,15 @@
 (require racket/match
          racket/contract/base
          racket/list
+         racket/set
          racket/async-channel
          racket/system
          ansi
-         (submod ansi/lcd-terminal event-structs)
          unix-signals
          lux/chaos
          raart/draw
          raart/buffer
          struct-define)
-(provide (all-from-out (submod ansi/lcd-terminal event-structs)))
 
 (struct term (f in out))
 
@@ -67,6 +66,18 @@
                  (reset-mode x11-any-event-mouse-tracking-mode)
                  (reset-mode x11-focus-event-mode)))
 
+(define (convert-key v)
+  (match v
+    [(key value mods)
+     (format "~a~a~a~a"
+             (if (set-member? mods 'meta) "M-" "")
+             (if (set-member? mods 'control) "C-" "")
+             (if (set-member? mods 'shift) "S-" "")
+             (if (char? value)
+               value
+               (format "<~a>" value)))]
+    [_ v]))
+
 (define (make-raart #:mouse? [mouse? #f])
   (define alternate? #t)
   (define ch (make-async-channel))
@@ -115,11 +126,13 @@
               (let loop ()
                 (define v (lex-lcd-input (term-in t) #:utf-8? #t))
                 (unless (eof-object? v)
-                  (async-channel-put ch v)
+                  (when (or (any-mouse-event? v)
+                            (screen-size-report? v)
+                            (key? v))
+                    (async-channel-put ch (convert-key v)))
                   (loop))))))
 
      ;; Register for window change events
-     ;; XXX some way to force this to be first
      (display/term t (device-request-screen-size))
      (set! sig-th
            (thread
@@ -148,6 +161,10 @@
      (close-term t))])
 
 (provide
+ (struct-out screen-size-report)
+ (struct-out any-mouse-event)
+ (struct-out mouse-focus-event)
+ (struct-out mouse-event)
  (contract-out
   [make-raart
    (->* () (#:mouse? boolean?) chaos?)]))
