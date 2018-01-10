@@ -107,7 +107,7 @@
 (struct cells (rows cols vec) #:mutable)
 (define (maybe-make-cells old new-rows new-cols)
   (match-define (cells old-rows old-cols vec) old)
-  ;; XXX support shrinking/growing
+  ;; XXX support shrinking/growing while preserving information
   (if (and (= old-rows new-rows)
            (= old-cols new-cols))
     old
