@@ -145,16 +145,18 @@
               (strict-or (dy) (dx))
               (strict-or (dx) (dy))))))
 
-(define (*happend2 y x)
+(define (*happend2 #:reverse? [reverse? #f] y x)
   (match-define (raart xw xh x!) x)
   (match-define (raart yw yh y!) y)
   (unless (= xh yh)
     (error '*happend2 "Heights must be equal: ~e vs ~e" xh yh))
   (raart* (+ xw yw) xh
           (λ (okay? d r c)
-            (strict-or
-             (x! okay? d r (+ c  0))
-             (y! okay? d r (+ c xw))))))
+            (define (dx) (x! okay? d r (+ c  0)))
+            (define (dy) (y! okay? d r (+ c xw)))
+            (if reverse?
+              (strict-or (dy) (dx))
+              (strict-or (dx) (dy))))))
 
 ;; Library
 (define (style s x) (with-drawing  s #f #f x))
@@ -219,20 +221,20 @@
 (define (vappend* #:halign [halign #f] #:reverse? [reverse? #f] rs)
   (apply vappend rs #:halign halign #:reverse? reverse?))
 
-(define (happend2 y x #:valign [valign #f])
+(define (happend2 y x #:valign [valign #f] #:reverse? [reverse? #f])
   (cond
-    [(not valign) (*happend2 y x)]
+    [(not valign) (*happend2 #:reverse? reverse? y x)]
     [else
      (match-define (raart xw xh x!) x)
      (match-define (raart yw yh y!) y)
      (define nh (max xh yh))
      (define xp (matte xw nh #:valign valign x))
      (define yp (matte yw nh #:valign valign y))
-     (*happend2 yp xp)]))
-(define (happend #:valign [valign #f] r1 . rs)
-  (foldl (λ (a d) (happend2 #:valign valign a d)) r1 rs))
-(define (happend* #:valign [valign #f] rs)
-  (apply happend rs #:valign valign))
+     (*happend2 #:reverse? reverse? yp xp)]))
+(define (happend #:valign [valign #f] #:reverse? [reverse? #f] r1 . rs)
+  (foldl (λ (a d) (happend2 #:valign valign #:reverse? reverse? a d)) r1 rs))
+(define (happend* #:valign [valign #f] #:reverse? [reverse? #f] rs)
+  (apply happend rs #:valign valign #:reverse? reverse?))
 
 (define (hline w)
   (text (make-string w #\─)))
@@ -354,10 +356,16 @@
   [vappend* (->* ((non-empty-listof raart?))
                  (#:halign (or/c halign/c #f) #:reverse? boolean?)
                  raart?)]
-  ;; xxx add reverse?
-  [happend2 (->* (raart? raart?) (#:valign (or/c valign/c #f)) raart?)]
-  [happend (->* (raart?) (#:valign (or/c valign/c #f)) #:rest (listof raart?) raart?)]
-  [happend* (->* ((non-empty-listof raart?)) (#:valign (or/c valign/c #f)) raart?)]
+  [happend2 (->* (raart? raart?)
+                 (#:valign (or/c valign/c #f) #:reverse? boolean?)
+                 raart?)]
+  [happend (->* (raart?)
+                (#:valign (or/c valign/c #f) #:reverse? boolean?)
+                #:rest (listof raart?)
+                raart?)]
+  [happend* (->* ((non-empty-listof raart?))
+                 (#:valign (or/c valign/c #f) #:reverse? boolean?)
+                 raart?)]
   [place-at (-> raart? exact-nonnegative-integer? exact-nonnegative-integer? raart?
                 raart?)]
   [frame (->* (raart?)
