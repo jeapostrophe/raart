@@ -132,16 +132,18 @@
                 (strict-or (! okay? d r c)
                            (d cr cc #f)))))
 
-(define (*vappend2 y x)
+(define (*vappend2 #:reverse? [reverse? #f] y x)
   (match-define (raart xw xh x!) x)
   (match-define (raart yw yh y!) y)
   (unless (= xw yw)
     (error '*vappend2 "Widths must be equal: ~e vs ~e" xw yw))
   (raart* xw (+ xh yh)
           (λ (okay? d r c)
-            (strict-or
-             (x! okay? d (+ r  0) c)
-             (y! okay? d (+ r xh) c)))))
+            (define (dx) (x! okay? d (+ r  0) c))
+            (define (dy) (y! okay? d (+ r xh) c))
+            (if reverse?
+              (strict-or (dy) (dx))
+              (strict-or (dx) (dy))))))
 
 (define (*happend2 y x)
   (match-define (raart xw xh x!) x)
@@ -202,20 +204,20 @@
          #:halign 'center #:valign 'center
          x))
 
-(define (vappend2 y x #:halign [halign #f])
+(define (vappend2 y x #:halign [halign #f] #:reverse? [reverse? #f])
   (cond
-    [(not halign) (*vappend2 y x)]
+    [(not halign) (*vappend2 #:reverse? reverse? y x)]
     [else
      (match-define (raart xw xh x!) x)
      (match-define (raart yw yh y!) y)
      (define nw (max xw yw))
      (define xp (matte nw xh #:halign halign x))
      (define yp (matte nw yh #:halign halign y))
-     (*vappend2 yp xp)]))
-(define (vappend #:halign [halign #f] r1 . rs)
-  (foldl (λ (a d) (vappend2 #:halign halign a d)) r1 rs))
-(define (vappend* #:halign [halign #f] rs)
-  (apply vappend rs #:halign halign))
+     (*vappend2 #:reverse? reverse? yp xp)]))
+(define (vappend #:halign [halign #f] #:reverse? [reverse? #f] r1 . rs)
+  (foldl (λ (a d) (vappend2 #:halign halign #:reverse? reverse? a d)) r1 rs))
+(define (vappend* #:halign [halign #f] #:reverse? [reverse? #f] rs)
+  (apply vappend rs #:halign halign #:reverse? reverse?))
 
 (define (happend2 y x #:valign [valign #f])
   (cond
@@ -342,9 +344,17 @@
   [text (-> string? raart?)]
   [hline (-> exact-nonnegative-integer? raart?)]
   [vline (-> exact-nonnegative-integer? raart?)]
-  [vappend2 (->* (raart? raart?) (#:halign (or/c halign/c #f)) raart?)]
-  [vappend (->* (raart?) (#:halign (or/c halign/c #f)) #:rest (listof raart?) raart?)]
-  [vappend* (->* ((non-empty-listof raart?)) (#:halign (or/c halign/c #f)) raart?)]
+  [vappend2 (->* (raart? raart?)
+                 (#:halign (or/c halign/c #f) #:reverse? boolean?)
+                 raart?)]
+  [vappend (->* (raart?)
+                (#:halign (or/c halign/c #f) #:reverse? boolean?)
+                #:rest (listof raart?)
+                raart?)]
+  [vappend* (->* ((non-empty-listof raart?))
+                 (#:halign (or/c halign/c #f) #:reverse? boolean?)
+                 raart?)]
+  ;; xxx add reverse?
   [happend2 (->* (raart? raart?) (#:valign (or/c valign/c #f)) raart?)]
   [happend (->* (raart?) (#:valign (or/c valign/c #f)) #:rest (listof raart?) raart?)]
   [happend* (->* ((non-empty-listof raart?)) (#:valign (or/c valign/c #f)) raart?)]
