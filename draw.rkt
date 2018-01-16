@@ -325,6 +325,9 @@
     (for/list ([col (in-list row)])
       (if (raart? col) col (text (~a col))))))
 
+(define (draw-here r)
+  (draw (make-output-buffer) r))
+
 (define valign/c (or/c 'top 'center 'bottom))
 (define halign/c (or/c 'left 'center 'right))
 (provide
@@ -333,6 +336,7 @@
   [draw
    (-> buffer? raart?
        void?)]
+  [draw-here (-> raart? void?)]
   [style (-> style/c raart? raart?)]
   [fg (-> color/c raart? raart?)]
   [bg (-> color/c raart? raart?)]
