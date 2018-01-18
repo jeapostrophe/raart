@@ -181,10 +181,12 @@
   (match-define (raart xw xh x!) x)
   (matte-at (+ xw dc) (+ xh dr) dc dr x))
 
-(define (matte w h
+(define (matte aw ah
                #:halign [ws 'center]
                #:valign [hs 'center]
                x)
+  (define w (or aw (raart-w x)))
+  (define h (or ah (raart-h x)))
   (match-define (raart xw xh x!) x)
   (unless (and (<= xw w) (<= xh h))
     (error 'matte "Original (~ax~a) must fit inside matte (~ax~a)"
@@ -383,7 +385,9 @@
                  raart? raart?)]
   [halign/c contract?]
   [valign/c contract?]
-  [matte (->* (exact-nonnegative-integer? exact-nonnegative-integer? raart?)
+  [matte (->* ((or/c exact-nonnegative-integer? false/c)
+               (or/c exact-nonnegative-integer? false/c)
+               raart?)
               (#:halign halign/c #:valign valign/c)
               raart?)]
   [inset (-> exact-nonnegative-integer? exact-nonnegative-integer? raart? raart?)]
