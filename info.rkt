@@ -1,6 +1,8 @@
 #lang info
 (define collection "raart")
-(define deps '("reprovide-lang"
+(define deps '("lux"
+               "unix-signals"
+               "reprovide-lang"
                "ansi"
                "struct-define"
                "base"))
