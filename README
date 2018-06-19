@@ -1,1 +1,4 @@
 raart - racket ansi art
+
+REQUIRES a patched version of racket-ansi:
+https://github.com/tonyg/racket-ansi/pull/3
