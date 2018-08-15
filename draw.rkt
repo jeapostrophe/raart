@@ -335,6 +335,8 @@
 (provide
  (contract-out
   [raart? (-> any/c boolean?)]
+  [raart-w (-> raart? integer?)]
+  [raart-h (-> raart? integer?)]
   [draw
    (-> buffer? raart?
        void?)]
