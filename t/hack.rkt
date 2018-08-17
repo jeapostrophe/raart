@@ -53,18 +53,19 @@
        ["q" #f]))
    (define (word-output w)
      (hack-define w)
-     (crop 0 cols 0 rows
-           (vappend
-            #:halign 'left
-            (text (~a "Hello Jack! Enjoy the hacking! Press q to quit."))
-            (place-at*
-             (for/fold ([c (blank world-cols world-rows)])
-                       ([o (in-list objs)])
-               (obj-define o)
-               (place-at c oy ox (fg 'blue (char oc))))
-             [py px (fg 'red (char #\@))])
-            (text (~a "Jack the Paren Hunter"))
-            (happend (text (~a "Steps: " steps " Score: " score))))))
+     (without-cursor
+      (crop 0 cols 0 rows
+            (vappend
+             #:halign 'left
+             (text (~a "Hello Jack! Enjoy the hacking! Press q to quit."))
+             (place-at*
+              (for/fold ([c (blank world-cols world-rows)])
+                        ([o (in-list objs)])
+                (obj-define o)
+                (place-at c oy ox (fg 'blue (char oc))))
+              [py px (fg 'red (char #\@))])
+             (text (~a "Jack the Paren Hunter"))
+             (happend (text (~a "Steps: " steps " Score: " score)))))))
    (define (word-return w)
      (hack-define w)
      (~a "You got " score " parens in " steps " steps!"))])

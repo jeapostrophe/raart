@@ -34,6 +34,11 @@
 ;; ! : okay? (row col char -> void) row col -> bool
 (struct raart (w h !))
 
+(struct meta-raart raart (m))
+(define (without-cursor x)
+  (match-define (raart w h !) x)
+  (meta-raart w h ! '(without-cursor)))
+
 (define (draw buf x)
   (match-define (raart w h !) x)
   (define-values
@@ -49,7 +54,9 @@
                          c r
                          (+ c w) (+ r h)))
   (! on-screen? draw-with-params 0 0)
-  (buffer-commit! buf))
+  (define without-cursor?
+    (memq 'without-cursor (if (meta-raart? x) (meta-raart-m x) '())))
+  (buffer-commit! #:cursor? (not without-cursor) buf))
 
 (define (raart* w h !)
   (raart w h
@@ -417,5 +424,7 @@
                 raart? raart?)]
   [place-cursor-after
    (-> raart? exact-nonnegative-integer? exact-nonnegative-integer?
-       raart?)])
+       raart?)]
+  [without-cursor
+   (-> raart? raart?)])
  place-at*)

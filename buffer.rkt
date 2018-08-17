@@ -8,7 +8,7 @@
 (define-generics buffer
   (buffer-resize! buffer rows cols)
   (buffer-start! buffer rows cols)
-  (buffer-commit! buffer))
+  (buffer-commit! buffer #:cursor? [cursor?]))
 
 (define symbol->style
   `#hasheq([normal . ,A:style-normal]
@@ -91,9 +91,9 @@
              (set! cur-c (add1 cur-c)))
 
            #t]))))
-   (define (buffer-commit! buf)
+   (define (buffer-commit! buf #:cursor? [cursor? #t])
      (terminal-buffer-define buf)
-     (display (A:show-cursor) op)
+     (when cursor? (display (A:show-cursor) op))
      (flush-output op))])
 
 (struct output-cell (s f b ch) #:mutable #:transparent)
@@ -154,7 +154,7 @@
      (buffer-resize! buf draw-rows draw-cols)
      (clear-cells! cells)
      (values draw-rows draw-cols (draw-cell! cells)))
-   (define (buffer-commit! buf)
+   (define (buffer-commit! buf #:cursor? [cursor? #t])
      (output-buffer-define buf)
      (for/fold ([last-s 'normal] [last-f #f] [last-b #f])
                ([row (in-vector (cells-vec cells))])
@@ -218,7 +218,7 @@
                (set! last-row r)
                (set! last-col c)
                (dc s f b r c ch))))
-   (define (buffer-commit! buf)
+   (define (buffer-commit! buf #:cursor? [cursor? #t])
      (cached-buffer-define buf)
      (define inner-buf (if clear-next? term-yclear term-nclear))
      (set! clear-next? #f)
@@ -235,7 +235,7 @@
            (match-define (output-cell s f b new-ch) new-cell)
            (draw! s f b r c (or new-ch #\space)))))
      (draw! 'normal #f #f last-row last-col #f)
-     (super-buffer-commit! inner-buf)
+     (super-buffer-commit! inner-buf #:cursor? cursor?)
      (swap! new-cells cur-cells))])
 
 (define-syntax-rule (swap! x y)
@@ -262,7 +262,7 @@
                    exact-nonnegative-integer? exact-nonnegative-integer? (or/c char? #f)
                    boolean?)))]
   [buffer-commit!
-   (-> buffer? void?)]
+   (->* (buffer?) (#:cursor? boolean?) void?)]
   [make-terminal-buffer
    (->* (exact-nonnegative-integer? exact-nonnegative-integer?)
         (#:clear? boolean? #:output output-port?)
