@@ -2,6 +2,7 @@
 @(require (for-label raart
                      lux/chaos
                      ansi
+                     racket/format
                      racket/contract
                      racket/base))
 
@@ -120,7 +121,123 @@ line of @litchar{-} characters of width @racket[w].}
 @defproc[(vline [h exact-nonnegative-integer?]) raart?]{A vertical
 line of @litchar{|} characters of height @racket[h].}
 
-XXX
+@defthing[halign/c contract?]{A contract for the horizontal alignment modes @racket['(left center right)]. @racket['left] means that the art will be extended with blanks to the right@";" @racket['center] places the blanks equally on both sides@";" and @racket['right] places the blanks to the left.}
+
+@defthing[valign/c contract?]{A contract for the vertical alignment modes @racket['(top center bottom)]. @racket['top] means that the art will be extended with blanks below";" @racket['center] places the blanks equally on both sides@";" and @racket['bottom] places the blanks above.}
+
+@defproc[(vappend2 [y raart?] [x raart?]
+[#:halign halign (or/c halign/c #f) #f]
+[#:reverse? reverse? boolean? #f]) raart?]{
+Renders @racket[y] vertically above @racket[x] (although, if
+@racket[reverse?] is true, then the reverse) using @racket[halign] to
+determine the horizontal alignment. If @racket[halign] is @racket[#f],
+then the arts must have the same width. }
+
+@defproc[(vappend [y raart?] [x raart?] ... [#:halign halign (or/c
+halign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
+@racket[vappend2], but for many arguments.}
+
+@defproc[(vappend* [y-and-xs (non-empty-listof raart?)] [#:halign
+halign (or/c halign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
+@racket[vappend], but for accepts arguments as a list.}
+
+@defproc[(happend2 [y raart?] [x raart?]  [#:valign valign (or/c
+valign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{ Renders
+@racket[y] horizontally to the left of @racket[x] (although, if
+@racket[reverse?] is true, then the reverse) using @racket[valign] to
+determine the vertical alignment. If @racket[valign] is @racket[#f],
+then the arts must have the same height.}
+
+@defproc[(happend [y raart?] [x raart?] ... [#:valign valign (or/c
+valign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
+@racket[happend2], but for many arguments.}
+
+@defproc[(happend* [y-and-xs (non-empty-listof raart?)] [#:valign valign (or/c
+valign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
+@racket[happend], but for accepts arguments as a list.}
+
+@defproc[(place-at [back raart?]  [dr exact-nonnegative-integer?]  [dh
+exact-nonnegative-integer?]  [front raart?]) raart?]{Renders
+@racket[front] on top of @racket[back] offset by @racket[dr] rows and
+@racket[dh] columns.}
+
+@defform[(place-at* back [dr dc fore] ...)  #:contracts ([back raart?]
+[dr exact-nonnegative-integer?] [dc exact-nonnegative-integer?] [fore
+raart?])]{Calls @racket[place-at] on a sequence of art objects from
+back on the left to front on the right.}
+
+@defproc[(frame [#:style s (or/c style/c #f) #f] [#:fg fc (or/c
+color/c #f)] [#:bg bc (or/c color/c #f)] [x raart?]) raart?]{Renders
+@racket[x] with a frame where the frame character's style is
+controlled by @racket[s], @racket[fc], and @racket[bc].}
+
+@defproc[(matte-at [mw exact-nonnegative-integer?] [mh
+exact-nonnegative-integer?] [c exact-nonnegative-integer?] [r
+exact-nonnegative-integer?] [x raart?]) raart?]{Mattes @racket[x]
+inside a blank of size @racket[mw] columns and @racket[mh] rows at row
+@racket[r] and column @racket[c].}
+
+@defproc[(translate [dr exact-nonnegative-integer?] [dc
+exact-nonnegative-integer?] [x raart?]) raart?]{Translates @racket[x]
+by @racket[dr] rows and @racket[dc] columns.}
+
+@defproc[(matte [w exact-nonnegative-integer?] [h
+exact-nonnegative-integer?] [#:halign halign halign/c 'center]
+[#:valign valign valign/c 'center] [x raart?]) raart?]{Mattes
+@racket[x] inside a blank of size @racket[w]x@racket[h] with the given
+alignment.}
+
+@defproc[(inset [dw exact-nonnegative-integer?] [dh
+exact-nonnegative-integer?] [x raart?]) raart?]{Insets @racket[x] with
+@racket[dw] columns and @racket[dh] rows of blanks.}
+
+@defproc[(mask [mc exact-nonnegative-integer?] [mw
+exact-nonnegative-integer?] [mr exact-nonnegative-integer?] [mh
+exact-nonnegative-integer?] [x raart?]) raart?]{Renders the portion of
+@racket[x] inside the rectangle (@racket[mc],@racket[mr])
+to (@racket[(+ mc mw)],@racket[(+ mr mh)]).}
+
+@defproc[(crop [cc exact-nonnegative-integer?] [cw
+exact-nonnegative-integer?] [cr exact-nonnegative-integer?] [ch
+exact-nonnegative-integer?] [x raart?]) raart?]{Renders the portion of
+@racket[x] inside the rectangle (@racket[cc],@racket[cr])
+to (@racket[(+ cc cw)],@racket[(+ cr ch)]) and removes the surrounding
+blanks.}
+
+@defproc[(table [cells (listof (listof raart?))] [#:frames? frames?
+boolean? #t] [#:style s (or/c style/c #f) #f] [#:fg f (or/c color/c
+#f) #f] [#:bg b (or/c color/c #f) #f] [#:inset-dw dw
+exact-nonnegative-integer? 0] [#:inset-dh dh
+exact-nonnegative-integer? 0] [#:valign row-valign valign/c 'top]
+[#:halign halign (or/c halign/c (list*of halign/c (or/c halign/c
+'()))) 'left]) raart?]{Renders a table of cells where frames are added
+if @racket[frames?] is non-false with style and color given by the
+arguments. Cells are inset by @racket[inset-dh] rows and
+@racket[inset-dw] columns. Cells are horizontally aligned with
+@racket[halign]. Rows are vertically aligned with
+@racket[row-valign].}
+
+@defproc[(text-rows [cells (listof (listof any/c))]) (listof (listof
+raart?))]{Transforms a matrix of content into a matrix of art objects,
+using @racket[~a] composed with @racket[text] if they are not already
+art objects.}
+
+@defproc[(if-drawn [f (-> exact-nonnegative-integer?
+exact-nonnegative-integer? exact-nonnegative-integer?
+exact-nonnegative-integer? any)] [x raart?]) raart?]{Renders
+@racket[x] and if it ends up being displayed, then calls @racket[f]
+with the actual bounding box, given as a row, column, width, and
+height.}
+
+@defproc[(place-cursor-after [x raart?] [cr
+exact-nonnegative-integer?] [ch exact-nonnegative-integer?])
+raart?]{Renders @racket[x] but places the cursor at row @racket[cr]
+and column @racket[ch] afterwards.}
+
+@defproc[(without-cursor [x raart?]) raart?]{Renders @racket[x], but
+signals to @racket[draw] to not display the cursor, if this is the art
+object given to it. (That is, this has no effect if composed with
+other drawing operations.)}
 
 @section{lux integration}
 @defmodule[raart/lux-chaos]
