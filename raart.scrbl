@@ -73,6 +73,53 @@ may depend on the terminal configuration. }
 @section{Drawing}
 @defmodule[raart/draw]
 
+@racketmodname[raart] represents ASCII art algebraically as an
+abstract @racket[raart?] object.
+
+@defproc[(raart? [x any/c]) boolean?]{Identifies ASCII art.}
+
+@defproc[(raart-w [x raart?]) exact-nonnegative-integer?]{Returns the
+width of the art.}
+
+@defproc[(raart-h [x raart?]) exact-nonnegative-integer?]{Returns the
+height of the art.}
+
+@defproc[(draw [b buffer?] [r raart?]) void?]{Displays @racket[r] to
+the @racket[b] buffer.}
+
+@defproc[(draw-here [r raart?]) void?]{Displays @racket[r] with a
+freshly created buffer made with @racket[make-output-buffer].}
+
+@defproc[(style [s style/c] [r raart?]) raart?]{@racket[r], except
+with the style given by @racket[s].}
+
+@defproc[(fg [c color/c] [r raart?]) raart?]{@racket[r], except with
+the foreground color given by @racket[c].}
+
+@defproc[(bg [c color/c] [r raart?]) raart?]{@racket[r], except with
+the background color given by @racket[c].}
+
+@defproc[(with-drawing [s (or/c style/c #f)] [fc (or/c color/c #f)]
+[bc (or/c color/c #f)] [r raart?]) raart?]{Wraps @racket[r] in calls
+to @racket[style], @racket[fg], and @racket[bg] if @racket[s],
+@racket[fc], or @racket[bc] (respectively) are provided as non-false.}
+
+@defproc[(blank [w exact-nonnegative-integer? 0] [h
+exact-nonnegative-integer? 0]) raart?]{A blank art of width @racket[w]
+and height @racket[h].}
+
+@defproc[(char [c (and/c char? (not/c char-iso-control?))]) raart?]{An
+art displaying @racket[c].}
+
+@defproc[(text [s string?]) raart?]{An art displaying @racket[s],
+which must not contain any @racket[char-iso-control?] characters.}
+
+@defproc[(hline [w exact-nonnegative-integer?]) raart?]{A horizontal
+line of @litchar{-} characters of width @racket[w].}
+
+@defproc[(vline [h exact-nonnegative-integer?]) raart?]{A vertical
+line of @litchar{|} characters of height @racket[h].}
+
 XXX
 
 @section{lux integration}
