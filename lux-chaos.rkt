@@ -10,6 +10,7 @@
          lux/chaos
          raart/draw
          raart/buffer
+         (submod raart/buffer internal)
          struct-define)
 
 (struct term (f in out))

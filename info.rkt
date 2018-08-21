@@ -9,3 +9,4 @@
 (define build-deps '())
 (define version "0.1")
 (define pkg-authors '(jeapostrophe))
+(define scribblings '(("raart.scrbl" () ("UI"))))

@@ -243,26 +243,31 @@
     (set! x y)
     (set! y tmp)))
 
+(module+ internal
+  (provide
+   (contract-out
+    [buffer-resize!
+     (-> buffer?
+         exact-nonnegative-integer? exact-nonnegative-integer?
+         void?)]
+    [buffer-start!
+     (-> buffer?
+         exact-nonnegative-integer? exact-nonnegative-integer?
+         (values exact-nonnegative-integer?
+                 exact-nonnegative-integer?
+                 (-> style/c color/c color/c
+                     exact-nonnegative-integer?
+                     exact-nonnegative-integer?
+                     (or/c char? #f)
+                     boolean?)))]
+    [buffer-commit!
+     (->* (buffer?) (#:cursor? boolean?) void?)])))
 
 (provide
  (contract-out
   [color/c contract?]
   [style/c contract?]
   [buffer? (-> any/c boolean?)]
-  [buffer-resize!
-   (-> buffer?
-       exact-nonnegative-integer? exact-nonnegative-integer?
-       void?)]
-  [buffer-start!
-   (-> buffer?
-       exact-nonnegative-integer? exact-nonnegative-integer?
-       (values exact-nonnegative-integer?
-               exact-nonnegative-integer?
-               (-> style/c color/c color/c
-                   exact-nonnegative-integer? exact-nonnegative-integer? (or/c char? #f)
-                   boolean?)))]
-  [buffer-commit!
-   (->* (buffer?) (#:cursor? boolean?) void?)]
   [make-terminal-buffer
    (->* (exact-nonnegative-integer? exact-nonnegative-integer?)
         (#:clear? boolean? #:output output-port?)

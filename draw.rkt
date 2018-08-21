@@ -4,7 +4,8 @@
          racket/contract/base
          (for-syntax racket/base
                      syntax/parse)
-         "buffer.rkt")
+         "buffer.rkt"
+         (submod "buffer.rkt" internal))
 
 ;; XXX ensure that argument order is ALWAYS w h r c
 
