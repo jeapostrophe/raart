@@ -1,10 +1,24 @@
 #lang scribble/manual
-@(require (for-label raart
+@(require (for-syntax racket/base)
+          (for-label raart
                      lux/chaos
                      ansi
                      racket/format
                      racket/contract
-                     racket/base))
+                     racket/base)
+          racket/sandbox
+          scribble/example)
+
+@(define ev
+   (parameterize ([sandbox-output 'string]
+                  [sandbox-error-output 'string]
+                  [sandbox-memory-limit 50]
+                  ;; Need to load the tty-raw extension and we don't
+                  ;; know where it is.
+                  [sandbox-path-permissions '((execute #rx#""))])
+     (make-evaluator 'racket/base)))
+@(ev '(require raart/draw))
+@(define-syntax-rule (ex r ...) (examples #:eval ev r ...))
 
 @title{raart: Racket ASCII Art and Interfaces}
 @author{Jay McCarthy}
@@ -107,54 +121,90 @@ to @racket[style], @racket[fg], and @racket[bg] if @racket[s],
 
 @defproc[(blank [w exact-nonnegative-integer? 0] [h
 exact-nonnegative-integer? 0]) raart?]{A blank art of width @racket[w]
-and height @racket[h].}
+and height @racket[h].
+
+@ex[(draw-here (blank 2 2))
+    (draw-here (blank 5 5))]
+
+}
 
 @defproc[(char [c (and/c char? (not/c char-iso-control?))]) raart?]{An
-art displaying @racket[c].}
+art displaying @racket[c].
+
+@ex[(draw-here (char #\a)) (draw-here (char #\b))]}
 
 @defproc[(text [s string?]) raart?]{An art displaying @racket[s],
-which must not contain any @racket[char-iso-control?] characters.}
+which must not contain any @racket[char-iso-control?] characters.
+
+@ex[(draw-here (text "Hello World!"))]}
 
 @defproc[(hline [w exact-nonnegative-integer?]) raart?]{A horizontal
-line of @litchar{-} characters of width @racket[w].}
+line of @litchar{-} characters of width @racket[w].
+
+@ex[(draw-here (hline 5))]}
 
 @defproc[(vline [h exact-nonnegative-integer?]) raart?]{A vertical
-line of @litchar{|} characters of height @racket[h].}
+line of @litchar{|} characters of height @racket[h].
+
+@ex[(draw-here (vline 3))]}
 
 @defthing[halign/c contract?]{A contract for the horizontal alignment modes @racket['(left center right)]. @racket['left] means that the art will be extended with blanks to the right@";" @racket['center] places the blanks equally on both sides@";" and @racket['right] places the blanks to the left.}
 
 @defthing[valign/c contract?]{A contract for the vertical alignment modes @racket['(top center bottom)]. @racket['top] means that the art will be extended with blanks below";" @racket['center] places the blanks equally on both sides@";" and @racket['bottom] places the blanks above.}
 
-@defproc[(vappend2 [y raart?] [x raart?]
-[#:halign halign (or/c halign/c #f) #f]
-[#:reverse? reverse? boolean? #f]) raart?]{
-Renders @racket[y] vertically above @racket[x] (although, if
-@racket[reverse?] is true, then the reverse) using @racket[halign] to
-determine the horizontal alignment. If @racket[halign] is @racket[#f],
-then the arts must have the same width. }
+@defproc[(vappend2 [y raart?] [x raart?]  [#:halign halign (or/c
+halign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{ Renders
+@racket[y] vertically above @racket[x]. (If @racket[reverse?] is true,
+then the effects are evaluated in the opposite order.) Uses
+@racket[halign] to determine the horizontal alignment. If
+@racket[halign] is @racket[#f], then the arts must have the same
+width.
+
+@ex[(draw-here (vappend2 (text "Hello") (text "World")))
+(eval:error
+  (draw-here (vappend2 (text "Short") (text "Very Very Long"))))
+(draw-here (vappend2 (text "Short") (text "Very Very Long") #:halign 'left))
+(draw-here (vappend2 (text "Short") (text "Very Very Long") #:halign 'right))
+(draw-here (vappend2 (text "Short") (text "Very Very Long") #:halign 'center))]}
 
 @defproc[(vappend [y raart?] [x raart?] ... [#:halign halign (or/c
 halign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
-@racket[vappend2], but for many arguments.}
+@racket[vappend2], but for many arguments.
+
+@ex[(draw-here (vappend (text "Short") (text "A Little Medium") (text "Very Very Long") #:halign 'right))]}
 
 @defproc[(vappend* [y-and-xs (non-empty-listof raart?)] [#:halign
-halign (or/c halign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
-@racket[vappend], but for accepts arguments as a list.}
+halign (or/c halign/c #f) #f] [#:reverse? reverse? boolean? #f])
+raart?]{Like @racket[vappend], but accepts arguments as a list.
+
+@ex[(draw-here (vappend* (list (text "Short") (text "A Little Medium") (text "Very Very Long")) #:halign 'right))]}
 
 @defproc[(happend2 [y raart?] [x raart?]  [#:valign valign (or/c
 valign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{ Renders
-@racket[y] horizontally to the left of @racket[x] (although, if
-@racket[reverse?] is true, then the reverse) using @racket[valign] to
-determine the vertical alignment. If @racket[valign] is @racket[#f],
-then the arts must have the same height.}
+@racket[y] horizontally to the left of @racket[x]. (If
+@racket[reverse?] is true, then the effects are evaluated in the
+opposite order.) Uses @racket[valign] to determine the vertical
+alignment. If @racket[valign] is @racket[#f], then the arts must have
+the same height.
+
+@ex[(draw-here (happend2 (vline 2) (vline 2)))
+(eval:error
+  (draw-here (happend2 (vline 2) (vline 4))))
+(draw-here (happend2 (vline 2) (vline 4) #:valign 'top))
+(draw-here (happend2 (vline 2) (vline 4) #:valign 'center))
+(draw-here (happend2 (vline 2) (vline 4) #:valign 'bottom))]}
 
 @defproc[(happend [y raart?] [x raart?] ... [#:valign valign (or/c
 valign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
-@racket[happend2], but for many arguments.}
+@racket[happend2], but for many arguments.
 
-@defproc[(happend* [y-and-xs (non-empty-listof raart?)] [#:valign valign (or/c
-valign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{Like
-@racket[happend], but for accepts arguments as a list.}
+@ex[(draw-here (happend (vline 2) (vline 3) (vline 4) #:valign 'top))]}
+
+@defproc[(happend* [y-and-xs (non-empty-listof raart?)] [#:valign
+valign (or/c valign/c #f) #f] [#:reverse? reverse? boolean? #f])
+raart?]{Like @racket[happend], but accepts arguments as a list.
+
+@ex[(draw-here (happend* (list (vline 2) (vline 3) (vline 4)) #:valign 'top))]}
 
 @defproc[(place-at [back raart?]  [dr exact-nonnegative-integer?]  [dh
 exact-nonnegative-integer?]  [front raart?]) raart?]{Renders

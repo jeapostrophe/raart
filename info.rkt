@@ -6,7 +6,8 @@
                "ansi"
                "struct-define"
                "base"))
-(define build-deps '("htdp-doc"
+(define build-deps '("sandbox-lib"
+                     "htdp-doc"
                      "racket-doc"
                      "scribble-lib"
                      ))
