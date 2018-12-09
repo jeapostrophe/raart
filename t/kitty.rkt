@@ -16,9 +16,7 @@
 (define pl
   (let ()
     (local-require plot racket/math racket/class racket/gui/base file/convertible)
-    (define r (plot (function sin (- pi) pi #:label "y = sin(x)")))
-    (displayln (vector (convertible? r) (is-a? r snip%)))
-    r))
+    (plot (function sin (- pi) pi #:label "y = sin(x)"))))
 
 "Not convertible"
 1
