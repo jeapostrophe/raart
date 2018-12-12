@@ -109,7 +109,13 @@
      (set! t (open-term))
      (set! rows 24)
      (set! cols 80)
-     (set! buf (make-cached-buffer rows cols #:output (term-out t)))
+     (set! buf
+           (make-terminal-buffer rows cols #:output (term-out t))
+           #;
+           (make-cached-buffer rows cols #:output (term-out t)))
+
+     ;; Save the current title
+     (display/term t "\e[22t")
 
      ;; Initialize term
      (when alternate?
@@ -158,6 +164,11 @@
        (display/term t x11-mouse-off))
      (when alternate?
        (display/term t (reset-mode alternate-screen-mode)))
+
+     (display/term t "\e[?12l\e[?25h")
+
+     ;; Restore the old title
+     (display/term t "\e[23t")
 
      (close-term t))])
 
