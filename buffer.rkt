@@ -62,8 +62,8 @@
      (define last-s 'normal)
      (define last-f #f)
      (define last-b #f)
-     (define cur-r 1)
-     (define cur-c 1)
+     (define cur-r -1)
+     (define cur-c -1)
      (values
       term-rows term-cols
       (λ (s f b r c ch)

@@ -109,10 +109,7 @@
      (set! t (open-term))
      (set! rows 24)
      (set! cols 80)
-     (set! buf
-           (make-terminal-buffer rows cols #:output (term-out t))
-           #;
-           (make-cached-buffer rows cols #:output (term-out t)))
+     (set! buf (make-cached-buffer rows cols #:output (term-out t)))
 
      ;; Save the current title
      (display/term t "\e[22t")
