@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/match
          racket/list
+         racket/string
          racket/contract/base
          (for-syntax racket/base
                      syntax/parse)
@@ -335,6 +336,18 @@
     (for/list ([col (in-list row)])
       (if (raart? col) col (text (~a col))))))
 
+(define (para mw s #:halign [halign 'left])
+  (para* mw (map text (string-split s " ")) #:halign halign))
+(define (para* mw rs #:halign [halign 'left])
+  (for/fold ([all-rows (list (blank))]
+             #:result
+             (vappend* #:halign halign (reverse all-rows)))
+            ([r (in-list rs)])
+    (match-define (cons last-row rows) all-rows)
+    (if (< (+ (raart-w last-row) (raart-w r)) mw)
+      (cons (happend last-row (text " ") r) rows)
+      (cons r all-rows))))
+
 (define (draw-here r)
   (draw (make-output-buffer) r))
 
@@ -419,6 +432,12 @@
               raart?)]
   [text-rows (-> (listof (listof any/c))
                  (listof (listof raart?)))]
+  [para (->* (exact-nonnegative-integer? string?)
+             (#:halign halign/c)
+             raart?)]
+  [para* (->* (exact-nonnegative-integer? (listof raart?))
+              (#:halign halign/c)
+              raart?)]
   [if-drawn (-> (-> exact-nonnegative-integer? exact-nonnegative-integer?
                     exact-nonnegative-integer? exact-nonnegative-integer?
                     any)

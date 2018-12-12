@@ -152,7 +152,7 @@ line of @litchar{|} characters of height @racket[h].
 
 @defthing[valign/c contract?]{A contract for the vertical alignment modes @racket['(top center bottom)]. @racket['top] means that the art will be extended with blanks below";" @racket['center] places the blanks equally on both sides@";" and @racket['bottom] places the blanks above.}
 
-@defproc[(vappend2 [y raart?] [x raart?]  [#:halign halign (or/c
+@defproc[(vappend2 [y raart?] [x raart?] [#:halign halign (or/c
 halign/c #f) #f] [#:reverse? reverse? boolean? #f]) raart?]{ Renders
 @racket[y] vertically above @racket[x]. (If @racket[reverse?] is true,
 then the effects are evaluated in the opposite order.) Uses
@@ -206,8 +206,14 @@ raart?]{Like @racket[happend], but accepts arguments as a list.
 
 @ex[(draw-here (happend* (list (vline 2) (vline 3) (vline 4)) #:valign 'top))]}
 
-@defproc[(place-at [back raart?]  [dr exact-nonnegative-integer?]  [dh
-exact-nonnegative-integer?]  [front raart?]) raart?]{Renders
+@defproc[(para [max-width exact-nonnegative-integer?] [s string?] [#:halign halign halign/c 'left]) raart?]{An art displaying @racket[s], that is at most @racket[max-width] wide, taking multiple lines if necessary.
+
+@ex[(draw-here (para 45 "And it came to pass that I, Nephi, said unto my father: I will go and do the things which the Lord hath commanded, for I know that the Lord giveth no commandments unto the children of men, save he shall prepare a way for them that they may accomplish the thing which he commandeth them."))]}
+
+@defproc[(para* [max-width exact-nonnegative-integer?] [rs (listof raart?)] [#:halign halign halign/c 'left]) raart?]{Like @racket[happend*], but limits the total width and uses @racket[vappend] when things get too long. @racket[para] uses this after splitting the input string into words.}
+
+@defproc[(place-at [back raart?] [dr exact-nonnegative-integer?] [dh
+exact-nonnegative-integer?] [front raart?]) raart?]{Renders
 @racket[front] on top of @racket[back] offset by @racket[dr] rows and
 @racket[dh] columns.}
 
