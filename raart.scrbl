@@ -210,7 +210,7 @@ raart?]{Like @racket[happend], but accepts arguments as a list.
 
 @ex[(draw-here (para 45 "And it came to pass that I, Nephi, said unto my father: I will go and do the things which the Lord hath commanded, for I know that the Lord giveth no commandments unto the children of men, save he shall prepare a way for them that they may accomplish the thing which he commandeth them."))]}
 
-@defproc[(para* [max-width exact-nonnegative-integer?] [rs (listof raart?)] [#:halign halign halign/c 'left]) raart?]{Like @racket[happend*], but limits the total width and uses @racket[vappend] when things get too long. @racket[para] uses this after splitting the input string into words.}
+@defproc[(para* [max-width exact-nonnegative-integer?] [rs (listof raart?)] [#:halign halign halign/c 'left] [#:gap gap raart? (blank)]) raart?]{Like @racket[happend*], but limits the total width and uses @racket[vappend] when things get too long. @racket[para] uses this after splitting the input string into words and supplies @racket[(text " ")] as the @racket[gap].}
 
 @defproc[(place-at [back raart?] [dr exact-nonnegative-integer?] [dh
 exact-nonnegative-integer?] [front raart?]) raart?]{Renders

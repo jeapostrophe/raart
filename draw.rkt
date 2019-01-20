@@ -337,15 +337,15 @@
       (if (raart? col) col (text (~a col))))))
 
 (define (para mw s #:halign [halign 'left])
-  (para* mw (map text (string-split s " ")) #:halign halign))
-(define (para* mw rs #:halign [halign 'left])
+  (para* mw (map text (string-split s " ")) #:halign halign #:gap (text " ")))
+(define (para* mw rs #:halign [halign 'left] #:gap [gap (blank)])
   (for/fold ([all-rows (list (blank))]
              #:result
              (vappend* #:halign halign (reverse all-rows)))
             ([r (in-list rs)])
     (match-define (cons last-row rows) all-rows)
     (if (< (+ (raart-w last-row) (raart-w r)) mw)
-      (cons (happend last-row (text " ") r) rows)
+      (cons (happend last-row gap r) rows)
       (cons r all-rows))))
 
 (define (draw-here r)
@@ -436,7 +436,7 @@
              (#:halign halign/c)
              raart?)]
   [para* (->* (exact-nonnegative-integer? (listof raart?))
-              (#:halign halign/c)
+              (#:halign halign/c #:gap raart?)
               raart?)]
   [if-drawn (-> (-> exact-nonnegative-integer? exact-nonnegative-integer?
                     exact-nonnegative-integer? exact-nonnegative-integer?
