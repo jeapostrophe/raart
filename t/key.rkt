@@ -13,7 +13,7 @@
           #:output (text (~a k))
           #:event
           (match-lambda
-            ["q" #f]
+            [(or "C-C" "q") #f]
             [x (show-key x)])))
 
   (show-key "Please enter a key."))

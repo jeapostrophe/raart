@@ -1,5 +1,8 @@
 #lang racket/base
 (require racket/match
+         racket/set
+         racket/runtime-path
+         json
          (prefix-in pict: pict)
          file/convertible
          racket/class
@@ -15,9 +18,12 @@
 ;; with
 ;; "racket -I raart/kitty-init -i -t file -e '(exit 0)'"
 
-(define (install-kitty-print!)
+(define (term-is-kitty?)
   (define t (environment-variables-ref (current-environment-variables) #"TERM"))
-  (when (equal? t #"xterm-kitty")
+  (equal? t #"xterm-kitty"))
+
+(define (install-kitty-print!)  
+  (when (term-is-kitty?)
     ;; XXX This could do better and use
     #;(pretty-print-size-hook)
     ;; and
@@ -50,4 +56,28 @@
         [v (old-print v)]))
     (current-print new-print)))
 
-(provide install-kitty-print!)
+(define-runtime-path kk.j "kitty-key.json")
+(define kk-ht
+  (for/hash ([(s e) (in-hash (with-input-from-file kk.j read-json))])
+    (define o (symbol->string s))
+    (values (string->bytes/utf-8 e)
+            (cond
+              [(= 1 (string-length o))
+               (string-ref o 0)]
+              [else o]))))
+(define (kitty-key-lookup k)
+  (hash-ref kk-ht k (λ () k)))
+
+(define (kitty-mods-lookup mb)
+  (define mn
+    (- (bytes-ref mb 0) (char->integer #\A)))
+  (for/fold ([s (seteq)])
+            ([m (in-list '(shift meta control super))]
+             [i (in-list '(1 2 4 8))])
+    (if (zero? (bitwise-and mn i)) s
+        (set-add s m))))
+
+(provide install-kitty-print!
+         term-is-kitty?
+         kitty-key-lookup
+         kitty-mods-lookup)

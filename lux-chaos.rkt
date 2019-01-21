@@ -5,13 +5,15 @@
          racket/set
          racket/async-channel
          racket/system
+         net/base64
          ansi
          unix-signals
          lux/chaos
          raart/draw
          raart/buffer
          (submod raart/buffer internal)
-         struct-define)
+         struct-define
+         "kitty.rkt")
 
 (struct term (f in out))
 
@@ -70,7 +72,8 @@
 (define (convert-key v)
   (match v
     [(key value mods)
-     (format "~a~a~a~a"
+     (format "~a~a~a~a~a"
+             (if (set-member? mods 'super) "s-" "")
              (if (set-member? mods 'meta) "M-" "")
              (if (set-member? mods 'control) "C-" "")
              (if (set-member? mods 'shift) "S-" "")
@@ -111,7 +114,10 @@
      (set! cols 80)
      (set! buf (make-cached-buffer rows cols #:output (term-out t)))
 
-     ;; Save the current title
+     ;; Save the current title and colors
+     (when (term-is-kitty?)
+       (display/term t "\e[?2017h")
+       (display/term t "\e]30001\e\\"))
      (display/term t "\e[22t")
 
      ;; Initialize term
@@ -127,8 +133,25 @@
      (set! input-th
            (thread
             (λ ()
+              (define iport (term-in t))
+              (define (std-lex1)
+                (lex-lcd-input iport #:utf-8? #t))
+              (define (kitty-lex1)
+                (cond
+                  [(regexp-try-match #rx#"^\e_K([prt])(.)(..?)\e\\\\" iport)
+                   => (match-lambda
+                        [(list lexeme type mods-b64 key-b64)
+                         (cond
+                           [(bytes=? type #"p")
+                            (key (kitty-key-lookup key-b64)
+                                 (kitty-mods-lookup mods-b64))]
+                           [else
+                            (kitty-lex1)])])]
+                  [else
+                   (std-lex1)]))
+              (define lex1 (if (term-is-kitty?) kitty-lex1 std-lex1))
               (let loop ()
-                (define v (lex-lcd-input (term-in t) #:utf-8? #t))
+                (define v (lex1))
                 (unless (eof-object? v)
                   (when (or (any-mouse-event? v)
                             (screen-size-report? v)
@@ -166,6 +189,9 @@
 
      ;; Restore the old title
      (display/term t "\e[23t")
+     (when (term-is-kitty?)
+       (display/term t "\e]30101\e\\")
+       (display/term t "\e[?2017l"))
 
      (close-term t))])
 
