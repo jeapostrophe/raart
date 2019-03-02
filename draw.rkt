@@ -316,19 +316,21 @@
                    cell-h #:valign row-valign
                    (inset dw dh col)))
           (define cell+left
-            (happend cell-wall the-cell))
-          (if (= col-i last-col)
+            (if frames? (happend cell-wall the-cell) the-cell))
+          (if (and frames? (= col-i last-col))
             (happend cell+left cell-wall)
             cell+left))))
      (define include-header? (zero? row-i))
      (define row-and-above
-       (if include-header? (vappend header the-row) the-row))
+       (if (and frames? include-header?) (vappend header the-row) the-row))
      (define include-footer? (= row-i last-row))
      (define row-and-below
-       (vappend row-and-above
-                (if include-footer?
-                  footer
-                  inbetween)))
+       (if frames?
+         (vappend row-and-above
+                  (if include-footer?
+                    footer
+                    inbetween))
+         row-and-above))
      row-and-below)))
 (define (text-rows rows)
   (local-require racket/format)
