@@ -26,7 +26,9 @@
 (define color/c (apply or/c #f (hash-keys symbol->color)))
 
 (define (select-style* s)
-  (A:select-graphic-rendition (hash-ref symbol->style s)))
+  (define (k s) (A:select-graphic-rendition (hash-ref symbol->style s)))
+  (if (eq? s 'normal) (k s)
+      (string-append (k 'normal) (k s))))
 (define (select-text-color* c)
   (if c
     (A:select-xterm-256-text-color (hash-ref symbol->color c))
@@ -59,7 +61,7 @@
      (when (terminal-buffer-clear? buf)
        (display (A:clear-screen/home) op))
      (display (A:hide-cursor) op)
-     (define last-s 'normal)
+     (define last-s #f)
      (define last-f #f)
      (define last-b #f)
      (define cur-r -1)
@@ -156,7 +158,7 @@
      (values draw-rows draw-cols (draw-cell! cells)))
    (define (buffer-commit! buf #:cursor? [cursor? #t])
      (output-buffer-define buf)
-     (for/fold ([last-s 'normal] [last-f #f] [last-b #f])
+     (for/fold ([last-s #f] [last-f #f] [last-b #f])
                ([row (in-vector (cells-vec cells))])
        (begin0
            (for/fold ([last-s last-s] [last-f last-f] [last-b last-b])
