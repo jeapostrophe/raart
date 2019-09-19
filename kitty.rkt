@@ -6,13 +6,11 @@
          (prefix-in pict: pict)
          file/convertible
          racket/class
-         racket/gui/base)
+         racket/gui/dynamic)
 
 (define (convert->png-bytes v)
   (and (convertible? v)
        (convert v 'png-bytes+bounds #f)))
-
-(define (snip? v) (is-a? v snip%))
 
 ;; Replace "racket -t file"
 ;; with
@@ -24,6 +22,9 @@
 
 (define (install-kitty-print!)  
   (when (term-is-kitty?)
+    (define (snip? v)
+      (and (gui-available?)
+           (is-a? v (gui-dynamic-require 'snip%))))
     ;; XXX This could do better and use
     #;(pretty-print-size-hook)
     ;; and
