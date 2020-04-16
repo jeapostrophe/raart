@@ -11,7 +11,7 @@
          ;;70 80 10 20
          (matte 80 20
                 #:halign 'right
-                (fg 'blue
+                (fg 17
                     (frame #:fg 'red
                            (inset
                             4 5

@@ -23,7 +23,10 @@
            [blue    .  4] [magenta   .  5] [cyan    .  6] [white    . 7]
            [brblack .  8] [brred     .  9] [brgreen . 10] [bryellow . 11]
            [brblue  . 12] [brmagenta . 13] [brcyan  . 14] [brwhite  . 15]))
-(define color/c (apply or/c #f (hash-keys symbol->color)))
+(define color/c (apply or/c byte? #f (hash-keys symbol->color)))
+(define (color->code c)
+  (if (byte? c) c
+      (hash-ref symbol->color c)))
 
 (define (select-style* s)
   (define (k s) (A:select-graphic-rendition (hash-ref symbol->style s)))
@@ -31,11 +34,11 @@
       (string-append (k 'normal) (k s))))
 (define (select-text-color* c)
   (if c
-    (A:select-xterm-256-text-color (hash-ref symbol->color c))
+    (A:select-xterm-256-text-color (color->code c))
     (A:select-graphic-rendition A:style-default-text-color)))
 (define (select-background-color* c)
   (if c
-    (A:select-xterm-256-background-color (hash-ref symbol->color c))
+    (A:select-xterm-256-background-color (color->code c))
     (A:select-graphic-rendition A:style-default-background-color)))
 
 (define (make-terminal-buffer term-rows term-cols

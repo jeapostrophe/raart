@@ -76,8 +76,9 @@ screen content so only updates are output. }
 
 A contract that recognizes the ASCII colors from the list
 @racket['(black red green yellow blue magenta cyan white brblack brred
-brgreen bryellow brblue brmagenta brcyan brwhite)]. The actual color
-display depends on the terminal configuration. }
+brgreen bryellow brblue brmagenta brcyan brwhite)], as well as any
+@racket[byte?] value. The actual color display depends on the terminal
+configuration. }
 
 @defthing[style/c contract?]{
 
