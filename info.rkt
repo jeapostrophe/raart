@@ -1,6 +1,11 @@
 #lang info
 (define collection "raart")
-(define deps '("lux"
+(define deps '("gui-lib"
+               "htdp-lib"
+               "pict-lib"
+               "plot-gui-lib"
+               "plot-lib"
+               "lux"
                "unix-signals"
                "reprovide-lang"
                "ansi"
